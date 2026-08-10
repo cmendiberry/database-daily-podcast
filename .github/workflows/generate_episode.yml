@@ -1,0 +1,328 @@
+# =============================================================================
+# Database Daily - Manual Episode Generation Workflow
+# =============================================================================
+#
+# Triggered manually via workflow_dispatch. Accepts the episode script and
+# metadata as inputs, generates audio using Kokoro TTS (af_heart, CPU only),
+# registers the episode, regenerates the RSS feed, validates everything, runs
+# the full test suite, and — only if all checks pass — commits to an episode
+# branch and opens a pull request for human review.
+#
+# Merging the PR triggers the existing publish workflow (validate.yml) and
+# makes the episode live on GitHub Pages.
+#
+# No API keys, no GPU, no paid services required.
+#
+# Inputs:
+#   episode_date        YYYY-MM-DD (required)
+#   episode_title       Optional — defaults to "Database Daily – YYYY-MM-DD"
+#   episode_description Optional — show notes written to RSS <description>
+#   episode_script      Full spoken text (~650–700 words targets ~5 min)
+#
+# Environment:
+#   KOKORO_MODEL_DIR    /tmp/kokoro  (model files, outside repo dir)
+#   GENERATED_DIR       /tmp/episode_generated  (temp audio/metrics)
+# =============================================================================
+
+name: Generate Episode (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_date:
+        description: "Episode date (YYYY-MM-DD)"
+        required: true
+        type: string
+      episode_title:
+        description: 'Episode title — optional, defaults to "Database Daily – YYYY-MM-DD"'
+        required: false
+        type: string
+        default: ""
+      episode_description:
+        description: "Episode description / show notes for RSS (optional)"
+        required: false
+        type: string
+        default: ""
+      episode_script:
+        description: "Full spoken episode script (~650–700 words for ~5 min)"
+        required: true
+        type: string
+
+jobs:
+  generate:
+    name: "Generate episode ${{ inputs.episode_date }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+
+    env:
+      EPISODE_DATE: ${{ inputs.episode_date }}
+      EPISODE_TITLE: ${{ inputs.episode_title }}
+      EPISODE_DESCRIPTION: ${{ inputs.episode_description }}
+      KOKORO_MODEL_DIR: /tmp/kokoro
+      GENERATED_DIR: /tmp/episode_generated
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout main
+      # -----------------------------------------------------------------------
+      - name: Checkout main branch
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      # -----------------------------------------------------------------------
+      # 2. Git identity (needed to commit from within the workflow)
+      # -----------------------------------------------------------------------
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      # -----------------------------------------------------------------------
+      # 3. Create episode branch
+      # -----------------------------------------------------------------------
+      - name: Create episode branch
+        run: |
+          BRANCH="episode/${EPISODE_DATE}"
+          git checkout -b "$BRANCH"
+          echo "EPISODE_BRANCH=${BRANCH}" >> "$GITHUB_ENV"
+          echo "Branch: ${BRANCH}"
+
+      # -----------------------------------------------------------------------
+      # 4. System dependencies
+      # -----------------------------------------------------------------------
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version 2>&1 | head -1
+
+      # -----------------------------------------------------------------------
+      # 5. Python
+      # -----------------------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # -----------------------------------------------------------------------
+      # 6. Download Kokoro model files into /tmp (outside repo tree)
+      # -----------------------------------------------------------------------
+      - name: Download Kokoro model files
+        run: |
+          mkdir -p "${KOKORO_MODEL_DIR}"
+          echo "=== Downloading kokoro-v1.0.onnx (311 MB) ==="
+          DOWNLOAD_START=$SECONDS
+          wget -q --show-progress \
+            -O "${KOKORO_MODEL_DIR}/kokoro-v1.0.onnx" \
+            "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          echo "=== Downloading voices-v1.0.bin (27 MB) ==="
+          wget -q --show-progress \
+            -O "${KOKORO_MODEL_DIR}/voices-v1.0.bin" \
+            "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+          DOWNLOAD_SECS=$(( SECONDS - DOWNLOAD_START ))
+          echo "MODEL_DOWNLOAD_SECS=${DOWNLOAD_SECS}" >> "$GITHUB_ENV"
+          echo "=== Download complete in ${DOWNLOAD_SECS}s ==="
+          ls -lh "${KOKORO_MODEL_DIR}/"
+
+      # -----------------------------------------------------------------------
+      # 7. Write episode script to a file (safe handling of multi-line input)
+      # -----------------------------------------------------------------------
+      - name: Write episode script to file
+        env:
+          EPISODE_SCRIPT: ${{ inputs.episode_script }}
+        run: |
+          mkdir -p "${GENERATED_DIR}"
+          python3 -c "
+          import os
+          from pathlib import Path
+          script = os.environ['EPISODE_SCRIPT']
+          out = Path(os.environ['GENERATED_DIR']) / 'script.txt'
+          out.write_text(script, encoding='utf-8')
+          words = len(script.split())
+          print(f'Script written: {words} words ({len(script)} chars)')
+          "
+
+      # -----------------------------------------------------------------------
+      # 8. Generate TTS audio (af_heart, CPU only)
+      # -----------------------------------------------------------------------
+      - name: Generate TTS audio (Kokoro af_heart)
+        run: |
+          python scripts/tts_generate.py \
+            --script-file   "${GENERATED_DIR}/script.txt" \
+            --output        "${GENERATED_DIR}/episode.mp3" \
+            --voice         af_heart \
+            --speed         1.0 \
+            --lang          en-us \
+            --model         "${KOKORO_MODEL_DIR}/kokoro-v1.0.onnx" \
+            --voices-bin    "${KOKORO_MODEL_DIR}/voices-v1.0.bin" \
+            --metrics-out   "${GENERATED_DIR}/metrics.json"
+
+      # -----------------------------------------------------------------------
+      # 9. Create episode directory, copy MP3, write metadata.yaml
+      # -----------------------------------------------------------------------
+      - name: Create episode directory and write metadata
+        run: |
+          python3 << 'PYEOF'
+          import json, os, sys, shutil
+          from pathlib import Path
+
+          sys.path.insert(0, "scripts")
+          from add_episode import next_episode_number, write_metadata
+
+          date_str     = os.environ["EPISODE_DATE"].strip()
+          title        = os.environ.get("EPISODE_TITLE", "").strip()
+          if not title:
+              title = f"Database Daily \u2013 {date_str}"
+          description  = os.environ.get("EPISODE_DESCRIPTION", "").strip()
+          generated    = Path(os.environ["GENERATED_DIR"])
+          episodes_dir = Path("episodes")
+
+          # Read timing metrics produced by tts_generate.py
+          with open(generated / "metrics.json", encoding="utf-8") as f:
+              metrics = json.load(f)
+          duration = metrics["duration_formatted"]
+
+          # Create episode directory and copy audio into the repo
+          episode_dir = episodes_dir / date_str
+          episode_dir.mkdir(parents=True, exist_ok=True)
+          audio_dest = episode_dir / "audio.mp3"
+          shutil.copy2(str(generated / "episode.mp3"), str(audio_dest))
+          print(f"Audio: {audio_dest} ({audio_dest.stat().st_size // 1024} KB)")
+
+          # Auto-detect episode number and derive stable GUID from date
+          episode_number = next_episode_number(episodes_dir)
+          guid = f"database-daily-{date_str}"
+
+          write_metadata(
+              episode_dir    = episode_dir,
+              title          = title,
+              date_str       = date_str,
+              description    = description,
+              audio_filename = "audio.mp3",
+              duration       = duration,
+              episode_number = episode_number,
+              season         = 1,
+              explicit       = False,
+              guid           = guid,
+          )
+
+          # Export resolved values for later steps
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"EPISODE_TITLE_RESOLVED={title}\n")
+              f.write(f"AUDIO_DURATION={duration}\n")
+              f.write(f"EPISODE_NUMBER={episode_number}\n")
+
+          print(f"Episode #{episode_number}: {title} ({duration})")
+          PYEOF
+
+      # -----------------------------------------------------------------------
+      # 10. Regenerate RSS feed
+      # -----------------------------------------------------------------------
+      - name: Regenerate RSS feed
+        run: python scripts/generate_feed.py
+
+      # -----------------------------------------------------------------------
+      # 11. Validate feed.xml
+      # -----------------------------------------------------------------------
+      - name: Validate RSS feed
+        run: python scripts/validate_feed.py
+
+      # -----------------------------------------------------------------------
+      # 12. Secret scan — must be clean before committing
+      # -----------------------------------------------------------------------
+      - name: Run secret scanner
+        run: python scripts/scan_secrets.py
+
+      # -----------------------------------------------------------------------
+      # 13. Full test suite — must be green before committing
+      # -----------------------------------------------------------------------
+      - name: Run full test suite
+        run: pytest tests/ -v --tb=short
+
+      # -----------------------------------------------------------------------
+      # 14. Commit episode files to the episode branch
+      # -----------------------------------------------------------------------
+      - name: Commit episode files
+        run: |
+          git add "episodes/${EPISODE_DATE}/" feed.xml
+
+          # Write commit message via Python to handle special characters safely
+          python3 -c "
+          import os
+          date   = os.environ['EPISODE_DATE']
+          title  = os.environ['EPISODE_TITLE_RESOLVED']
+          dur    = os.environ['AUDIO_DURATION']
+          num    = os.environ['EPISODE_NUMBER']
+          msg = (
+              f'episode: add {date}\n\n'
+              f'Title   : {title}\n'
+              f'Voice   : af_heart\n'
+              f'Duration: {dur}\n'
+              f'Episode : #{num}\n\n'
+              'Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>'
+          )
+          with open('/tmp/commit_msg.txt', 'w', encoding='utf-8') as f:
+              f.write(msg)
+          "
+
+          git commit -F /tmp/commit_msg.txt
+          git push origin "${EPISODE_BRANCH}"
+          echo "Pushed: ${EPISODE_BRANCH}"
+
+      # -----------------------------------------------------------------------
+      # 15. Open a pull request for human review before publishing
+      # -----------------------------------------------------------------------
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -c "
+          import os
+          date  = os.environ['EPISODE_DATE']
+          title = os.environ['EPISODE_TITLE_RESOLVED']
+          dur   = os.environ['AUDIO_DURATION']
+          num   = os.environ['EPISODE_NUMBER']
+          secs  = os.environ.get('MODEL_DOWNLOAD_SECS', '?')
+          body = (
+              f'## Database Daily \u2014 Episode #{num}\n\n'
+              f'**Date:** {date}  \n'
+              f'**Title:** {title}  \n'
+              f'**Voice:** af_heart (Kokoro TTS, CPU only)  \n'
+              f'**Duration:** {dur}  \n'
+              f'**Model download time:** {secs}s  \n\n'
+              '### Review checklist\n'
+              '- [ ] Listen to the episode audio (download from workflow artifacts below)\n'
+              f'- [ ] Verify \`episodes/{date}/metadata.yaml\` looks correct\n'
+              '- [ ] Confirm the RSS feed validates at the link below\n\n'
+              '### To publish\n'
+              'Merge this PR. The existing **Validate** workflow will run and '
+              'deploy to GitHub Pages automatically.\n\n'
+              '> Do not merge until you have listened to and approved the audio.'
+          )
+          with open('/tmp/pr_body.txt', 'w', encoding='utf-8') as f:
+              f.write(body)
+          "
+
+          gh pr create \
+            --base main \
+            --head "${EPISODE_BRANCH}" \
+            --title "Episode: ${EPISODE_TITLE_RESOLVED}" \
+            --body-file /tmp/pr_body.txt
+
+      # -----------------------------------------------------------------------
+      # 16. Upload MP3 artifact for listening before merging
+      # -----------------------------------------------------------------------
+      - name: Upload episode MP3 for review
+        uses: actions/upload-artifact@v7
+        with:
+          name: episode-${{ inputs.episode_date }}-audio
+          path: episodes/${{ inputs.episode_date }}/audio.mp3
+          retention-days: 7
