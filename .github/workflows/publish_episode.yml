@@ -2,63 +2,55 @@
 # Database Daily - Production Episode Publication Workflow
 # =============================================================================
 #
-# ARCHITECTURE — TWO JOBS
-# ───────────────────────
-# Job 1 (publish):
-#   Generate audio → validate everything → upload Pages artifact → commit main → push
+# ARCHITECTURE — THREE JOBS
+# ─────────────────────────
+# Job 1 (preflight):
+#   Resolve episode date. Idempotency check.
+#   For SCHEDULE runs: if the episode already exists, set skip=true and exit 0.
+#   For DISPATCH runs: if the episode already exists, exit 1 (refuse to overwrite).
+#   Outputs: skip (true|false), episode_date (YYYY-MM-DD)
 #
-# Job 2 (deploy-pages):
-#   needs: publish
-#   Deploy the Pages artifact uploaded by Job 1.
+# Job 2 (publish):
+#   needs: preflight
+#   if: skip != 'true'
+#   Research → generate script → TTS → validate → upload Pages artifact →
+#   commit main → push
 #
-# Splitting into two jobs makes Pages deployment independently recoverable:
+# Job 3 (deploy-pages):
+#   needs: [preflight, publish]
+#   if: skip != 'true'
+#   Deploy the Pages artifact uploaded by Job 2.
 #
-#   If generation/validation fails  → main is unchanged, nothing deploys.
-#   If git push fails               → Job 1 fails, Job 2 does not run.
-#   If Pages deployment fails       → re-run Job 2 only, without re-generating
-#                                     the episode or hitting the idempotency check.
-#
-# There is NO episode branch, NO pull request, and NO manual merge step.
-# A GITHUB_TOKEN push does not trigger other workflows, so Pages is deployed
-# directly from this workflow via the proven mechanism used in validate.yml.
+# IDEMPOTENCY BEHAVIOR
+# ────────────────────
+# SCHEDULE  + episode already exists  → skip=true, workflow succeeds (no-op)
+# SCHEDULE  + episode does not exist  → full pipeline runs
+# DISPATCH  + episode already exists  → workflow fails immediately (refuse to overwrite)
+# DISPATCH  + episode does not exist  → full pipeline runs
 #
 # FAIL-SAFE
 # ─────────
-# Nothing is committed until ALL of the following succeed in Job 1:
-#   1. TTS generation
-#   2. MP3 creation
-#   3. Episode metadata
-#   4. RSS feed regeneration
-#   5. Index page regeneration
-#   6. Feed XML validation
-#   7. Secret scan
-#   8. Complete pytest suite
-#   9. Pages artifact upload
-# Only then: git commit → git push → (Job 2) deploy Pages.
+# Nothing is committed until ALL of the following succeed in Job 2:
+#   1. Automated research + script generation
+#   2. TTS generation
+#   3. MP3 creation
+#   4. Episode metadata
+#   5. RSS feed regeneration
+#   6. Index page regeneration
+#   7. Feed XML validation
+#   8. Secret scan
+#   9. Complete pytest suite (110 tests)
+#  10. Pages artifact upload
+# Only then: git commit → git push → (Job 3) deploy Pages.
 #
-# IDEMPOTENCY
-# ───────────
-# If the episode directory for the target date already exists, the workflow
-# fails immediately without modifying anything.
-#
-# SCHEDULE (DISABLED — enable after automated research/script generation
-#           is implemented and the first manual workflow_dispatch test passes)
-# ─────────────────────────────────────────────────────────────────────────────
-# GitHub Actions supports IANA timezone-aware schedules.
-# Target: Monday–Friday 21:00 America/Argentina/Buenos_Aires
-#
-# To activate, uncomment the schedule block below:
-#
-#   schedule:
-#     - cron: '0 21 * * 1-5'
-#       timezone: "America/Argentina/Buenos_Aires"
+# SCHEDULE
+# ────────
+# Monday–Friday 21:00 America/Argentina/Buenos_Aires
 #
 # CONCURRENCY
 # ───────────
 # The 'production-episode-publish' group ensures only one production run
-# (both jobs combined) executes at a time. A second trigger queues rather
-# than cancels. The github-pages environment in Job 2 additionally serialises
-# Pages deployments at the platform level.
+# executes at a time. A second trigger queues rather than cancels.
 # =============================================================================
 
 name: Publish Episode (Production)
@@ -67,7 +59,7 @@ on:
   workflow_dispatch:
     inputs:
       episode_date:
-        description: "Episode date (YYYY-MM-DD) — leave blank on scheduled runs"
+        description: "Episode date (YYYY-MM-DD) — leave blank to use today (Buenos Aires)"
         required: false
         type: string
         default: ""
@@ -82,13 +74,13 @@ on:
         type: string
         default: ""
       episode_script:
-        description: "Full spoken episode script (~650–700 words for ~5 min)"
+        description: "Full spoken episode script — leave blank to use automated research"
         required: false
         type: string
         default: ""
-  # schedule:
-  #   - cron: '0 21 * * 1-5'
-  #     timezone: "America/Argentina/Buenos_Aires"
+  schedule:
+    - cron: '0 21 * * 1-5'
+      timezone: "America/Argentina/Buenos_Aires"
 
 concurrency:
   group: production-episode-publish
@@ -96,10 +88,39 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # Job 1: Generate episode, validate, upload Pages artifact, commit and push
+  # Job 1: Resolve date, check idempotency, decide whether to proceed
+  # ===========================================================================
+  preflight:
+    name: "Preflight: resolve date and idempotency check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+      episode_date: ${{ steps.check.outputs.episode_date }}
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      # Resolve date, check for existing episode, write skip/episode_date outputs.
+      # For schedule events: existing episode → skip=true, exit 0 (no-op).
+      # For dispatch events: existing episode → exit 1 (refuse to overwrite).
+      - name: Resolve date and check idempotency
+        id: check
+        env:
+          EPISODE_DATE: ${{ inputs.episode_date }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/preflight.py
+
+  # ===========================================================================
+  # Job 2: Generate episode, validate, upload Pages artifact, commit and push
   # ===========================================================================
   publish:
-    name: "Generate, validate, and push episode"
+    name: "Research, generate, validate, and push episode"
+    needs: preflight
+    if: needs.preflight.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -108,7 +129,7 @@ jobs:
       id-token: write   # OIDC (required by configure-pages and deploy-pages)
 
     env:
-      EPISODE_DATE: ${{ inputs.episode_date }}
+      EPISODE_DATE: ${{ needs.preflight.outputs.episode_date }}
       EPISODE_TITLE: ${{ inputs.episode_title }}
       EPISODE_DESCRIPTION: ${{ inputs.episode_description }}
       KOKORO_MODEL_DIR: /tmp/kokoro
@@ -132,47 +153,7 @@ jobs:
           git config user.name "github-actions[bot]"
 
       # -----------------------------------------------------------------------
-      # 3. Resolve episode date
-      #    workflow_dispatch: use the supplied date
-      #    schedule: compute today in Buenos Aires time using Python's
-      #    datetime (timezone is applied by the schedule trigger, but the date
-      #    computation here is a safety net for manual runs with no date)
-      # -----------------------------------------------------------------------
-      - name: Resolve episode date
-        run: |
-          python3 -c "
-          import os
-          date = os.environ.get('EPISODE_DATE', '').strip()
-          if not date:
-              from datetime import datetime, timezone, timedelta
-              art = timezone(timedelta(hours=-3))
-              date = datetime.now(art).strftime('%Y-%m-%d')
-              print(f'Scheduled run: using Buenos Aires date {date}')
-          else:
-              print(f'Manual run: date = {date}')
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
-              f.write(f'EPISODE_DATE={date}\n')
-          "
-
-      # -----------------------------------------------------------------------
-      # 4. Idempotency check — fail immediately if episode already exists
-      # -----------------------------------------------------------------------
-      - name: Check episode does not already exist
-        run: |
-          python3 -c "
-          import os, sys
-          from pathlib import Path
-          date = os.environ['EPISODE_DATE']
-          ep_dir = Path('episodes') / date
-          if ep_dir.exists():
-              print(f'ERROR: Episode already exists: {ep_dir}', file=sys.stderr)
-              print('Refusing to overwrite or create a duplicate.', file=sys.stderr)
-              sys.exit(1)
-          print(f'OK: No existing episode for {date}')
-          "
-
-      # -----------------------------------------------------------------------
-      # 5. System dependencies
+      # 3. System dependencies
       # -----------------------------------------------------------------------
       - name: Install ffmpeg
         run: |
@@ -181,7 +162,7 @@ jobs:
           ffmpeg -version 2>&1 | head -1
 
       # -----------------------------------------------------------------------
-      # 6. Python
+      # 4. Python
       # -----------------------------------------------------------------------
       - name: Set up Python 3.11
         uses: actions/setup-python@v7
@@ -190,10 +171,10 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt -r requirements-tts.txt
+        run: pip install -r requirements.txt -r requirements-tts.txt -r requirements-research.txt
 
       # -----------------------------------------------------------------------
-      # 7. Download Kokoro model files into /tmp (outside repo tree)
+      # 5. Download Kokoro model files into /tmp (outside repo tree)
       # -----------------------------------------------------------------------
       - name: Download Kokoro model files
         run: |
@@ -213,32 +194,23 @@ jobs:
           ls -lh "${KOKORO_MODEL_DIR}/"
 
       # -----------------------------------------------------------------------
-      # 8. Write episode script to file
-      #    For scheduled runs: fails here with a clear message until automated
-      #    research/script generation is implemented and replaces this step.
+      # 6. Research and generate episode script
+      #    - If EPISODE_SCRIPT input is set: use it directly (no API call).
+      #    - Otherwise: fetch RSS feeds and generate script via Claude API.
+      #    Writes script.txt and sources.json to $GENERATED_DIR.
       # -----------------------------------------------------------------------
-      - name: Write episode script to file
+      - name: Research and generate episode script
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           EPISODE_SCRIPT: ${{ inputs.episode_script }}
         run: |
           mkdir -p "${GENERATED_DIR}"
-          python3 -c "
-          import os, sys
-          from pathlib import Path
-          script = os.environ.get('EPISODE_SCRIPT', '').strip()
-          if not script:
-              print('ERROR: Episode script is empty.', file=sys.stderr)
-              print('For scheduled runs, automated research/script generation', file=sys.stderr)
-              print('must be implemented before activating the schedule.', file=sys.stderr)
-              sys.exit(1)
-          out = Path(os.environ['GENERATED_DIR']) / 'script.txt'
-          out.write_text(script, encoding='utf-8')
-          words = len(script.split())
-          print(f'Script written: {words} words ({len(script)} chars)')
-          "
+          python scripts/research_generate.py \
+            --date "${EPISODE_DATE}" \
+            --output-dir "${GENERATED_DIR}"
 
       # -----------------------------------------------------------------------
-      # 9. Generate TTS audio (Kokoro af_heart, CPU only)
+      # 7. Generate TTS audio (Kokoro af_heart, CPU only)
       # -----------------------------------------------------------------------
       - name: Generate TTS audio (Kokoro af_heart)
         run: |
@@ -253,8 +225,9 @@ jobs:
             --metrics-out   "${GENERATED_DIR}/metrics.json"
 
       # -----------------------------------------------------------------------
-      # 10. Stage episode directory and write metadata
-      #     Copies audio into the repo working tree. Nothing is committed yet.
+      # 8. Stage episode directory and write metadata
+      #    Copies audio and sources into the repo working tree.
+      #    Nothing is committed yet.
       # -----------------------------------------------------------------------
       - name: Stage episode directory and metadata
         run: |
@@ -279,9 +252,15 @@ jobs:
 
           episode_dir = episodes_dir / date_str
           episode_dir.mkdir(parents=True, exist_ok=True)
+
           audio_dest = episode_dir / "audio.mp3"
           shutil.copy2(str(generated / "episode.mp3"), str(audio_dest))
           print(f"Audio: {audio_dest} ({audio_dest.stat().st_size // 1024} KB)")
+
+          sources_src = generated / "sources.json"
+          if sources_src.exists():
+              shutil.copy2(str(sources_src), str(episode_dir / "sources.json"))
+              print(f"Sources: {episode_dir / 'sources.json'}")
 
           episode_number = next_episode_number(episodes_dir)
           guid = f"database-daily-{date_str}"
@@ -308,31 +287,31 @@ jobs:
           PYEOF
 
       # -----------------------------------------------------------------------
-      # 11. Regenerate RSS feed
+      # 9. Regenerate RSS feed
       # -----------------------------------------------------------------------
       - name: Regenerate RSS feed
         run: python scripts/generate_feed.py
 
       # -----------------------------------------------------------------------
-      # 12. Regenerate index.html
+      # 10. Regenerate index.html
       # -----------------------------------------------------------------------
       - name: Regenerate index page
         run: python scripts/generate_index.py
 
       # -----------------------------------------------------------------------
-      # 13. Validate RSS feed
+      # 11. Validate RSS feed
       # -----------------------------------------------------------------------
       - name: Validate RSS feed
         run: python scripts/validate_feed.py
 
       # -----------------------------------------------------------------------
-      # 14. Secret scan — must be clean before committing
+      # 12. Secret scan — must be clean before committing
       # -----------------------------------------------------------------------
       - name: Run secret scanner
         run: python scripts/scan_secrets.py
 
       # -----------------------------------------------------------------------
-      # 15. Full test suite — must be green before committing
+      # 13. Full test suite — must be green before committing
       # -----------------------------------------------------------------------
       - name: Run full test suite
         run: pytest tests/ -v --tb=short
@@ -340,13 +319,12 @@ jobs:
       # ═══════════════════════════════════════════════════════════════════════
       # ALL VALIDATIONS PASSED
       # Upload the Pages artifact first, then commit and push main.
-      # If git push fails, Job 2 (deploy-pages) will not run because this job
+      # If git push fails, Job 3 (deploy-pages) will not run because this job
       # failed. Pages deployment cannot race ahead of the git state.
       # ═══════════════════════════════════════════════════════════════════════
 
       # -----------------------------------------------------------------------
-      # 16. Prepare the Pages artifact from the current working tree
-      #     (includes all staged episode files, updated feed.xml, index.html)
+      # 14. Prepare the Pages artifact from the current working tree
       #     Uploaded before the commit so deployment is independently retryable.
       # -----------------------------------------------------------------------
       - name: Configure GitHub Pages
@@ -358,9 +336,9 @@ jobs:
           path: "."
 
       # -----------------------------------------------------------------------
-      # 17. Commit episode files and push to main
+      # 15. Commit episode files and push to main
       #     This step runs after the artifact is uploaded.
-      #     If this push fails, Job 2 does not run (needs: publish).
+      #     If this push fails, Job 3 does not run (needs: publish).
       # -----------------------------------------------------------------------
       - name: Commit and push to main
         run: |
@@ -389,7 +367,7 @@ jobs:
           echo "Pushed: episode ${EPISODE_DATE} (Episode #${EPISODE_NUMBER}) to main"
 
       # -----------------------------------------------------------------------
-      # 18. Publish summary (episode committed; Pages deployment follows in Job 2)
+      # 16. Publish summary
       # -----------------------------------------------------------------------
       - name: Print episode summary
         run: |
@@ -404,14 +382,15 @@ jobs:
           echo "======================================="
 
   # ===========================================================================
-  # Job 2: Deploy the Pages artifact prepared by Job 1
+  # Job 3: Deploy the Pages artifact prepared by Job 2
   #
-  # Independently retryable: if this job fails after Job 1 succeeded,
+  # Independently retryable: if this job fails after Job 2 succeeded,
   # re-run this job only — no regeneration, no idempotency check.
   # ===========================================================================
   deploy-pages:
     name: "Deploy to GitHub Pages"
-    needs: publish
+    needs: [preflight, publish]
+    if: needs.preflight.outputs.skip != 'true'
     runs-on: ubuntu-latest
     permissions:
       pages: write      # deploy to GitHub Pages
