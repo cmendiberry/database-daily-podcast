@@ -1,0 +1,119 @@
+# =============================================================================
+# Database Daily - CI Validation Workflow
+# =============================================================================
+# Runs on every push and pull request.
+# No secrets are required for this workflow.
+# =============================================================================
+
+name: Validate
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Feed & Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # -----------------------------------------------------------------------
+      # Step 1: Secret scan — fail fast if secrets are detected
+      # -----------------------------------------------------------------------
+      - name: Run secret scanner
+        run: python scripts/scan_secrets.py
+
+      # -----------------------------------------------------------------------
+      # Step 2: Regenerate feed from current episode metadata
+      # -----------------------------------------------------------------------
+      - name: Generate RSS feed
+        run: python scripts/generate_feed.py
+
+      # -----------------------------------------------------------------------
+      # Step 3: Validate the generated feed.xml is well-formed XML
+      # -----------------------------------------------------------------------
+      - name: Validate RSS XML is well-formed
+        run: python -c "
+import xml.etree.ElementTree as ET, sys
+try:
+    tree = ET.parse('feed.xml')
+    root = tree.getroot()
+    assert root.tag == 'rss', f'Root element should be rss, got {root.tag}'
+    assert root.attrib.get('version') == '2.0', 'RSS version should be 2.0'
+    channel = root.find('channel')
+    assert channel is not None, 'Missing <channel> element'
+    title = channel.findtext('title')
+    assert title, 'Missing or empty <title>'
+    print(f'Feed valid: {title!r}, {len(root.findall(\".//item\"))} episode(s)')
+except Exception as e:
+    print(f'Feed validation FAILED: {e}', file=sys.stderr)
+    sys.exit(1)
+"
+
+      # -----------------------------------------------------------------------
+      # Step 4: Run the full test suite
+      # -----------------------------------------------------------------------
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+
+  # ---------------------------------------------------------------------------
+  # Publish to GitHub Pages (only on push to main)
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate RSS feed
+        run: python scripts/generate_feed.py
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Serve the entire repository root as the Pages site
+          path: "."
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
