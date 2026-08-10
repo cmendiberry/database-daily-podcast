@@ -1,4 +1,5 @@
-# Database Daily - Python dependencies
+# Database Daily - Core Python dependencies
+# Used by: validate CI, publish CI, generate episode CI, local development
 # Install with: pip install -r requirements.txt
 
 # YAML parsing for podcast.yaml and episode metadata.yaml files
