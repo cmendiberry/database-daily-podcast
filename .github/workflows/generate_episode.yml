@@ -110,7 +110,7 @@ jobs:
           cache: pip
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r requirements-tts.txt
 
       # -----------------------------------------------------------------------
       # 6. Download Kokoro model files into /tmp (outside repo tree)
