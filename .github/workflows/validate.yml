@@ -90,6 +90,9 @@ jobs:
       - name: Generate RSS feed
         run: python scripts/generate_feed.py
 
+      - name: Generate index page
+        run: python scripts/generate_index.py
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
 

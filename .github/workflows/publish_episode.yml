@@ -1,0 +1,392 @@
+# =============================================================================
+# Database Daily - Production Episode Publication Workflow
+# =============================================================================
+#
+# ARCHITECTURE
+# ────────────
+# This is the production publishing workflow. It generates an episode, validates
+# everything, and — only after all checks pass — commits directly to main and
+# deploys GitHub Pages from the same job.
+#
+# There is NO episode branch, NO pull request, and NO manual merge step.
+#
+# A GITHUB_TOKEN push does not trigger other workflows, so this workflow
+# deploys GitHub Pages itself using the same proven mechanism as validate.yml.
+#
+# FAIL-SAFE
+# ─────────
+# Nothing is committed until ALL of the following succeed:
+#   1. TTS generation
+#   2. MP3 creation
+#   3. Episode metadata
+#   4. RSS feed regeneration
+#   5. Feed XML validation
+#   6. Secret scan
+#   7. Complete pytest suite
+# If any step fails, main remains unchanged.
+#
+# IDEMPOTENCY
+# ───────────
+# If the episode directory for the target date already exists, the workflow
+# fails immediately without modifying anything.
+#
+# SCHEDULE (DISABLED — enable after automated research/script generation
+#           is implemented and the first manual run succeeds)
+# ─────────────────────────────────────────────────────────────────────
+# Target:  Monday–Friday 21:00 America/Argentina/Buenos_Aires (UTC-3, no DST)
+# In UTC:  Tuesday–Saturday 00:00 UTC
+#
+# To activate, uncomment the schedule block below:
+#
+#   schedule:
+#     - cron: '0 0 * * 2-6'
+#
+# Note: GitHub Actions schedules run in UTC. Buenos Aires is UTC-3 with no
+# daylight saving time, so 21:00 ART is always 00:00 UTC the next calendar day.
+# Mon→Tue, Tue→Wed, Wed→Thu, Thu→Fri, Fri→Sat in UTC day-of-week terms.
+#
+# CONCURRENCY
+# ───────────
+# The 'production-episode-publish' group ensures only one episode generation
+# and deployment runs at a time. A second trigger waits rather than cancels.
+# =============================================================================
+
+name: Publish Episode (Production)
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_date:
+        description: "Episode date (YYYY-MM-DD) — leave blank on scheduled runs"
+        required: false
+        type: string
+        default: ""
+      episode_title:
+        description: 'Episode title — optional, defaults to "Database Daily – YYYY-MM-DD"'
+        required: false
+        type: string
+        default: ""
+      episode_description:
+        description: "Episode description / show notes for RSS (optional)"
+        required: false
+        type: string
+        default: ""
+      episode_script:
+        description: "Full spoken episode script (~650–700 words for ~5 min)"
+        required: false
+        type: string
+        default: ""
+  # schedule:
+  #   - cron: '0 0 * * 2-6'   # Mon–Fri 21:00 Buenos Aires = Tue–Sat 00:00 UTC
+
+concurrency:
+  group: production-episode-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: "Publish episode"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write   # push episode commit to main
+      pages: write      # deploy to GitHub Pages
+      id-token: write   # OIDC authentication for Pages deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    env:
+      EPISODE_DATE: ${{ inputs.episode_date }}
+      EPISODE_TITLE: ${{ inputs.episode_title }}
+      EPISODE_DESCRIPTION: ${{ inputs.episode_description }}
+      KOKORO_MODEL_DIR: /tmp/kokoro
+      GENERATED_DIR: /tmp/episode_generated
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout main
+      # -----------------------------------------------------------------------
+      - name: Checkout main branch
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      # -----------------------------------------------------------------------
+      # 2. Git identity (needed to commit from within the workflow)
+      # -----------------------------------------------------------------------
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      # -----------------------------------------------------------------------
+      # 3. Resolve episode date
+      #    workflow_dispatch: use supplied date (required for manual runs)
+      #    schedule: compute today in Buenos Aires time (UTC-3)
+      # -----------------------------------------------------------------------
+      - name: Resolve episode date
+        run: |
+          python3 -c "
+          import os
+          from pathlib import Path
+          date = os.environ.get('EPISODE_DATE', '').strip()
+          if not date:
+              from datetime import datetime, timezone, timedelta
+              art = timezone(timedelta(hours=-3))
+              date = datetime.now(art).strftime('%Y-%m-%d')
+              print(f'Scheduled run: using Buenos Aires date {date}')
+          else:
+              print(f'Manual run: date = {date}')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              f.write(f'EPISODE_DATE={date}\n')
+          "
+
+      # -----------------------------------------------------------------------
+      # 4. Idempotency check — fail immediately if episode already exists
+      # -----------------------------------------------------------------------
+      - name: Check episode does not already exist
+        run: |
+          python3 -c "
+          import os, sys
+          from pathlib import Path
+          date = os.environ['EPISODE_DATE']
+          ep_dir = Path('episodes') / date
+          if ep_dir.exists():
+              print(f'ERROR: Episode already exists: {ep_dir}', file=sys.stderr)
+              print('Refusing to overwrite or create a duplicate.', file=sys.stderr)
+              sys.exit(1)
+          print(f'OK: No existing episode for {date}')
+          "
+
+      # -----------------------------------------------------------------------
+      # 5. System dependencies
+      # -----------------------------------------------------------------------
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version 2>&1 | head -1
+
+      # -----------------------------------------------------------------------
+      # 6. Python
+      # -----------------------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt -r requirements-tts.txt
+
+      # -----------------------------------------------------------------------
+      # 7. Download Kokoro model files into /tmp (outside repo tree)
+      # -----------------------------------------------------------------------
+      - name: Download Kokoro model files
+        run: |
+          mkdir -p "${KOKORO_MODEL_DIR}"
+          echo "=== Downloading kokoro-v1.0.onnx (311 MB) ==="
+          DOWNLOAD_START=$SECONDS
+          wget -q --show-progress \
+            -O "${KOKORO_MODEL_DIR}/kokoro-v1.0.onnx" \
+            "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx"
+          echo "=== Downloading voices-v1.0.bin (27 MB) ==="
+          wget -q --show-progress \
+            -O "${KOKORO_MODEL_DIR}/voices-v1.0.bin" \
+            "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+          DOWNLOAD_SECS=$(( SECONDS - DOWNLOAD_START ))
+          echo "MODEL_DOWNLOAD_SECS=${DOWNLOAD_SECS}" >> "$GITHUB_ENV"
+          echo "=== Download complete in ${DOWNLOAD_SECS}s ==="
+          ls -lh "${KOKORO_MODEL_DIR}/"
+
+      # -----------------------------------------------------------------------
+      # 8. Write episode script to file
+      #    For scheduled runs: fails here if no script is provided.
+      #    This is intentional until automated research/script generation
+      #    is implemented and replaces this step.
+      # -----------------------------------------------------------------------
+      - name: Write episode script to file
+        env:
+          EPISODE_SCRIPT: ${{ inputs.episode_script }}
+        run: |
+          mkdir -p "${GENERATED_DIR}"
+          python3 -c "
+          import os, sys
+          from pathlib import Path
+          script = os.environ.get('EPISODE_SCRIPT', '').strip()
+          if not script:
+              print('ERROR: Episode script is empty.', file=sys.stderr)
+              print('For scheduled runs, automated research/script generation', file=sys.stderr)
+              print('must be implemented before activating the schedule.', file=sys.stderr)
+              sys.exit(1)
+          out = Path(os.environ['GENERATED_DIR']) / 'script.txt'
+          out.write_text(script, encoding='utf-8')
+          words = len(script.split())
+          print(f'Script written: {words} words ({len(script)} chars)')
+          "
+
+      # -----------------------------------------------------------------------
+      # 9. Generate TTS audio (Kokoro af_heart, CPU only)
+      # -----------------------------------------------------------------------
+      - name: Generate TTS audio (Kokoro af_heart)
+        run: |
+          python scripts/tts_generate.py \
+            --script-file   "${GENERATED_DIR}/script.txt" \
+            --output        "${GENERATED_DIR}/episode.mp3" \
+            --voice         af_heart \
+            --speed         1.0 \
+            --lang          en-us \
+            --model         "${KOKORO_MODEL_DIR}/kokoro-v1.0.onnx" \
+            --voices-bin    "${KOKORO_MODEL_DIR}/voices-v1.0.bin" \
+            --metrics-out   "${GENERATED_DIR}/metrics.json"
+
+      # -----------------------------------------------------------------------
+      # 10. Stage episode directory and write metadata
+      #     Copies audio into the repo working tree. Nothing is committed yet.
+      # -----------------------------------------------------------------------
+      - name: Stage episode directory and metadata
+        run: |
+          python3 << 'PYEOF'
+          import json, os, sys, shutil
+          from pathlib import Path
+
+          sys.path.insert(0, "scripts")
+          from add_episode import next_episode_number, write_metadata
+
+          date_str    = os.environ["EPISODE_DATE"].strip()
+          title       = os.environ.get("EPISODE_TITLE", "").strip()
+          if not title:
+              title = f"Database Daily \u2013 {date_str}"
+          description = os.environ.get("EPISODE_DESCRIPTION", "").strip()
+          generated   = Path(os.environ["GENERATED_DIR"])
+          episodes_dir = Path("episodes")
+
+          with open(generated / "metrics.json", encoding="utf-8") as f:
+              metrics = json.load(f)
+          duration = metrics["duration_formatted"]
+
+          episode_dir = episodes_dir / date_str
+          episode_dir.mkdir(parents=True, exist_ok=True)
+          audio_dest = episode_dir / "audio.mp3"
+          shutil.copy2(str(generated / "episode.mp3"), str(audio_dest))
+          print(f"Audio: {audio_dest} ({audio_dest.stat().st_size // 1024} KB)")
+
+          episode_number = next_episode_number(episodes_dir)
+          guid = f"database-daily-{date_str}"
+
+          write_metadata(
+              episode_dir    = episode_dir,
+              title          = title,
+              date_str       = date_str,
+              description    = description,
+              audio_filename = "audio.mp3",
+              duration       = duration,
+              episode_number = episode_number,
+              season         = 1,
+              explicit       = False,
+              guid           = guid,
+          )
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"EPISODE_TITLE_RESOLVED={title}\n")
+              f.write(f"AUDIO_DURATION={duration}\n")
+              f.write(f"EPISODE_NUMBER={episode_number}\n")
+
+          print(f"Episode #{episode_number}: {title} ({duration})")
+          PYEOF
+
+      # -----------------------------------------------------------------------
+      # 11. Regenerate RSS feed
+      # -----------------------------------------------------------------------
+      - name: Regenerate RSS feed
+        run: python scripts/generate_feed.py
+
+      # -----------------------------------------------------------------------
+      # 12. Regenerate index.html
+      # -----------------------------------------------------------------------
+      - name: Regenerate index page
+        run: python scripts/generate_index.py
+
+      # -----------------------------------------------------------------------
+      # 13. Validate RSS feed
+      # -----------------------------------------------------------------------
+      - name: Validate RSS feed
+        run: python scripts/validate_feed.py
+
+      # -----------------------------------------------------------------------
+      # 14. Secret scan — must be clean before committing
+      # -----------------------------------------------------------------------
+      - name: Run secret scanner
+        run: python scripts/scan_secrets.py
+
+      # -----------------------------------------------------------------------
+      # 15. Full test suite — must be green before committing
+      # -----------------------------------------------------------------------
+      - name: Run full test suite
+        run: pytest tests/ -v --tb=short
+
+      # ═══════════════════════════════════════════════════════════════════════
+      # ALL VALIDATIONS PASSED — COMMIT TO MAIN AND DEPLOY
+      # ═══════════════════════════════════════════════════════════════════════
+
+      # -----------------------------------------------------------------------
+      # 16. Commit episode files directly to main
+      # -----------------------------------------------------------------------
+      - name: Commit and push to main
+        run: |
+          git add "episodes/${EPISODE_DATE}/" feed.xml index.html
+
+          python3 -c "
+          import os
+          date  = os.environ['EPISODE_DATE']
+          title = os.environ['EPISODE_TITLE_RESOLVED']
+          dur   = os.environ['AUDIO_DURATION']
+          num   = os.environ['EPISODE_NUMBER']
+          msg = (
+              f'episode: add {date}\n\n'
+              f'Title   : {title}\n'
+              f'Voice   : af_heart\n'
+              f'Duration: {dur}\n'
+              f'Episode : #{num}\n\n'
+              'Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>'
+          )
+          with open('/tmp/commit_msg.txt', 'w', encoding='utf-8') as f:
+              f.write(msg)
+          "
+
+          git commit -F /tmp/commit_msg.txt
+          git push origin main
+          echo "Committed and pushed episode ${EPISODE_DATE} to main"
+
+      # -----------------------------------------------------------------------
+      # 17. Deploy GitHub Pages
+      #     A GITHUB_TOKEN push does not trigger other workflows, so this
+      #     workflow deploys Pages directly rather than relying on validate.yml.
+      # -----------------------------------------------------------------------
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: "."
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v5
+
+      # -----------------------------------------------------------------------
+      # 18. Print summary
+      # -----------------------------------------------------------------------
+      - name: Print publication summary
+        run: |
+          echo ""
+          echo "====== EPISODE PUBLISHED ======"
+          echo "Date     : ${EPISODE_DATE}"
+          echo "Title    : ${EPISODE_TITLE_RESOLVED}"
+          echo "Duration : ${AUDIO_DURATION}"
+          echo "Episode  : #${EPISODE_NUMBER}"
+          echo "Download : ${MODEL_DOWNLOAD_SECS}s model download"
+          echo "Pages    : ${{ steps.deploy.outputs.page_url }}"
+          echo "==============================="
