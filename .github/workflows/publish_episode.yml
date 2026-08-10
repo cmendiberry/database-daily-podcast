@@ -2,28 +2,39 @@
 # Database Daily - Production Episode Publication Workflow
 # =============================================================================
 #
-# ARCHITECTURE
-# ────────────
-# This is the production publishing workflow. It generates an episode, validates
-# everything, and — only after all checks pass — commits directly to main and
-# deploys GitHub Pages from the same job.
+# ARCHITECTURE — TWO JOBS
+# ───────────────────────
+# Job 1 (publish):
+#   Generate audio → validate everything → upload Pages artifact → commit main → push
+#
+# Job 2 (deploy-pages):
+#   needs: publish
+#   Deploy the Pages artifact uploaded by Job 1.
+#
+# Splitting into two jobs makes Pages deployment independently recoverable:
+#
+#   If generation/validation fails  → main is unchanged, nothing deploys.
+#   If git push fails               → Job 1 fails, Job 2 does not run.
+#   If Pages deployment fails       → re-run Job 2 only, without re-generating
+#                                     the episode or hitting the idempotency check.
 #
 # There is NO episode branch, NO pull request, and NO manual merge step.
-#
-# A GITHUB_TOKEN push does not trigger other workflows, so this workflow
-# deploys GitHub Pages itself using the same proven mechanism as validate.yml.
+# A GITHUB_TOKEN push does not trigger other workflows, so Pages is deployed
+# directly from this workflow via the proven mechanism used in validate.yml.
 #
 # FAIL-SAFE
 # ─────────
-# Nothing is committed until ALL of the following succeed:
+# Nothing is committed until ALL of the following succeed in Job 1:
 #   1. TTS generation
 #   2. MP3 creation
 #   3. Episode metadata
 #   4. RSS feed regeneration
-#   5. Feed XML validation
-#   6. Secret scan
-#   7. Complete pytest suite
-# If any step fails, main remains unchanged.
+#   5. Index page regeneration
+#   6. Feed XML validation
+#   7. Secret scan
+#   8. Complete pytest suite
+#   9. Pages artifact upload
+# Only then: git commit → git push → (Job 2) deploy Pages.
 #
 # IDEMPOTENCY
 # ───────────
@@ -31,24 +42,23 @@
 # fails immediately without modifying anything.
 #
 # SCHEDULE (DISABLED — enable after automated research/script generation
-#           is implemented and the first manual run succeeds)
-# ─────────────────────────────────────────────────────────────────────
-# Target:  Monday–Friday 21:00 America/Argentina/Buenos_Aires (UTC-3, no DST)
-# In UTC:  Tuesday–Saturday 00:00 UTC
+#           is implemented and the first manual workflow_dispatch test passes)
+# ─────────────────────────────────────────────────────────────────────────────
+# GitHub Actions supports IANA timezone-aware schedules.
+# Target: Monday–Friday 21:00 America/Argentina/Buenos_Aires
 #
 # To activate, uncomment the schedule block below:
 #
 #   schedule:
-#     - cron: '0 0 * * 2-6'
-#
-# Note: GitHub Actions schedules run in UTC. Buenos Aires is UTC-3 with no
-# daylight saving time, so 21:00 ART is always 00:00 UTC the next calendar day.
-# Mon→Tue, Tue→Wed, Wed→Thu, Thu→Fri, Fri→Sat in UTC day-of-week terms.
+#     - cron: '0 21 * * 1-5'
+#       timezone: "America/Argentina/Buenos_Aires"
 #
 # CONCURRENCY
 # ───────────
-# The 'production-episode-publish' group ensures only one episode generation
-# and deployment runs at a time. A second trigger waits rather than cancels.
+# The 'production-episode-publish' group ensures only one production run
+# (both jobs combined) executes at a time. A second trigger queues rather
+# than cancels. The github-pages environment in Job 2 additionally serialises
+# Pages deployments at the platform level.
 # =============================================================================
 
 name: Publish Episode (Production)
@@ -77,24 +87,25 @@ on:
         type: string
         default: ""
   # schedule:
-  #   - cron: '0 0 * * 2-6'   # Mon–Fri 21:00 Buenos Aires = Tue–Sat 00:00 UTC
+  #   - cron: '0 21 * * 1-5'
+  #     timezone: "America/Argentina/Buenos_Aires"
 
 concurrency:
   group: production-episode-publish
   cancel-in-progress: false
 
 jobs:
+  # ===========================================================================
+  # Job 1: Generate episode, validate, upload Pages artifact, commit and push
+  # ===========================================================================
   publish:
-    name: "Publish episode"
+    name: "Generate, validate, and push episode"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write   # push episode commit to main
-      pages: write      # deploy to GitHub Pages
-      id-token: write   # OIDC authentication for Pages deployment
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      pages: write      # configure Pages and upload artifact
+      id-token: write   # OIDC (required by configure-pages and deploy-pages)
 
     env:
       EPISODE_DATE: ${{ inputs.episode_date }}
@@ -122,14 +133,15 @@ jobs:
 
       # -----------------------------------------------------------------------
       # 3. Resolve episode date
-      #    workflow_dispatch: use supplied date (required for manual runs)
-      #    schedule: compute today in Buenos Aires time (UTC-3)
+      #    workflow_dispatch: use the supplied date
+      #    schedule: compute today in Buenos Aires time using Python's
+      #    datetime (timezone is applied by the schedule trigger, but the date
+      #    computation here is a safety net for manual runs with no date)
       # -----------------------------------------------------------------------
       - name: Resolve episode date
         run: |
           python3 -c "
           import os
-          from pathlib import Path
           date = os.environ.get('EPISODE_DATE', '').strip()
           if not date:
               from datetime import datetime, timezone, timedelta
@@ -202,9 +214,8 @@ jobs:
 
       # -----------------------------------------------------------------------
       # 8. Write episode script to file
-      #    For scheduled runs: fails here if no script is provided.
-      #    This is intentional until automated research/script generation
-      #    is implemented and replaces this step.
+      #    For scheduled runs: fails here with a clear message until automated
+      #    research/script generation is implemented and replaces this step.
       # -----------------------------------------------------------------------
       - name: Write episode script to file
         env:
@@ -254,12 +265,12 @@ jobs:
           sys.path.insert(0, "scripts")
           from add_episode import next_episode_number, write_metadata
 
-          date_str    = os.environ["EPISODE_DATE"].strip()
-          title       = os.environ.get("EPISODE_TITLE", "").strip()
+          date_str     = os.environ["EPISODE_DATE"].strip()
+          title        = os.environ.get("EPISODE_TITLE", "").strip()
           if not title:
               title = f"Database Daily \u2013 {date_str}"
-          description = os.environ.get("EPISODE_DESCRIPTION", "").strip()
-          generated   = Path(os.environ["GENERATED_DIR"])
+          description  = os.environ.get("EPISODE_DESCRIPTION", "").strip()
+          generated    = Path(os.environ["GENERATED_DIR"])
           episodes_dir = Path("episodes")
 
           with open(generated / "metrics.json", encoding="utf-8") as f:
@@ -327,11 +338,29 @@ jobs:
         run: pytest tests/ -v --tb=short
 
       # ═══════════════════════════════════════════════════════════════════════
-      # ALL VALIDATIONS PASSED — COMMIT TO MAIN AND DEPLOY
+      # ALL VALIDATIONS PASSED
+      # Upload the Pages artifact first, then commit and push main.
+      # If git push fails, Job 2 (deploy-pages) will not run because this job
+      # failed. Pages deployment cannot race ahead of the git state.
       # ═══════════════════════════════════════════════════════════════════════
 
       # -----------------------------------------------------------------------
-      # 16. Commit episode files directly to main
+      # 16. Prepare the Pages artifact from the current working tree
+      #     (includes all staged episode files, updated feed.xml, index.html)
+      #     Uploaded before the commit so deployment is independently retryable.
+      # -----------------------------------------------------------------------
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: "."
+
+      # -----------------------------------------------------------------------
+      # 17. Commit episode files and push to main
+      #     This step runs after the artifact is uploaded.
+      #     If this push fails, Job 2 does not run (needs: publish).
       # -----------------------------------------------------------------------
       - name: Commit and push to main
         run: |
@@ -357,36 +386,41 @@ jobs:
 
           git commit -F /tmp/commit_msg.txt
           git push origin main
-          echo "Committed and pushed episode ${EPISODE_DATE} to main"
+          echo "Pushed: episode ${EPISODE_DATE} (Episode #${EPISODE_NUMBER}) to main"
 
       # -----------------------------------------------------------------------
-      # 17. Deploy GitHub Pages
-      #     A GITHUB_TOKEN push does not trigger other workflows, so this
-      #     workflow deploys Pages directly rather than relying on validate.yml.
+      # 18. Publish summary (episode committed; Pages deployment follows in Job 2)
       # -----------------------------------------------------------------------
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v6
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: "."
-
-      - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@v5
-
-      # -----------------------------------------------------------------------
-      # 18. Print summary
-      # -----------------------------------------------------------------------
-      - name: Print publication summary
+      - name: Print episode summary
         run: |
           echo ""
-          echo "====== EPISODE PUBLISHED ======"
+          echo "====== EPISODE COMMITTED TO MAIN ======"
           echo "Date     : ${EPISODE_DATE}"
           echo "Title    : ${EPISODE_TITLE_RESOLVED}"
           echo "Duration : ${AUDIO_DURATION}"
           echo "Episode  : #${EPISODE_NUMBER}"
           echo "Download : ${MODEL_DOWNLOAD_SECS}s model download"
-          echo "Pages    : ${{ steps.deploy.outputs.page_url }}"
-          echo "==============================="
+          echo "Pages    : deploying in next job..."
+          echo "======================================="
+
+  # ===========================================================================
+  # Job 2: Deploy the Pages artifact prepared by Job 1
+  #
+  # Independently retryable: if this job fails after Job 1 succeeded,
+  # re-run this job only — no regeneration, no idempotency check.
+  # ===========================================================================
+  deploy-pages:
+    name: "Deploy to GitHub Pages"
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write      # deploy to GitHub Pages
+      id-token: write   # OIDC authentication for Pages deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v5
