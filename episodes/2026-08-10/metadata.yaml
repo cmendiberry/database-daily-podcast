@@ -1,0 +1,14 @@
+# Database Daily - Episode Metadata
+# Safe for public repositories - no secrets here
+
+title: 'Database upgrades: PostgreSQL 19, Aurora PostgreSQL 18, and Aurora MySQL 8.4'
+date: '2026-08-10T07:00:00+00:00'
+description: Today’s Database Daily looks at PostgreSQL 19 Beta 2, Aurora PostgreSQL
+  18, Aurora MySQL 8.4, and the practical steps database teams can take to prepare
+  for major-version upgrades.
+audio_file: audio.mp3
+duration: '5:08'
+episode_number: 1
+season: 1
+explicit: false
+guid: database-daily-2026-08-10
