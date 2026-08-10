@@ -49,22 +49,7 @@ jobs:
       # Step 3: Validate the generated feed.xml is well-formed XML
       # -----------------------------------------------------------------------
       - name: Validate RSS XML is well-formed
-        run: python -c "
-import xml.etree.ElementTree as ET, sys
-try:
-    tree = ET.parse('feed.xml')
-    root = tree.getroot()
-    assert root.tag == 'rss', f'Root element should be rss, got {root.tag}'
-    assert root.attrib.get('version') == '2.0', 'RSS version should be 2.0'
-    channel = root.find('channel')
-    assert channel is not None, 'Missing <channel> element'
-    title = channel.findtext('title')
-    assert title, 'Missing or empty <title>'
-    print(f'Feed valid: {title!r}, {len(root.findall(\".//item\"))} episode(s)')
-except Exception as e:
-    print(f'Feed validation FAILED: {e}', file=sys.stderr)
-    sys.exit(1)
-"
+        run: python scripts/validate_feed.py
 
       # -----------------------------------------------------------------------
       # Step 4: Run the full test suite
