@@ -1,10 +1,13 @@
 # Database Daily
 
-A short weekday podcast briefing covering the latest important news in
+A short weekly digest covering the latest important news in
 **Amazon Aurora**, **Microsoft SQL Server**, and **PostgreSQL** — with a
 quick explanation of why each story matters.
 
-Target length: approximately 5 minutes per episode, published every weekday morning.
+This is a **personal** project: every Monday, automated research produces a
+short written digest, which is rendered as a pretty HTML page and emailed
+directly to the owner's inbox. There is no podcast, no audio, no public
+website — just an email.
 
 > **Repository status:** This repository is intentionally **PUBLIC**.
 > All committed files are safe for anyone on the internet to read.
@@ -15,18 +18,14 @@ Target length: approximately 5 minutes per episode, published every weekday morn
 ## Table of Contents
 
 1. [Repository Structure](#repository-structure)
-2. [How RSS Publishing Works](#how-rss-publishing-works)
-3. [GitHub Pages Decision](#github-pages-decision)
-4. [What Is Public](#what-is-public)
-5. [Where Secrets Go](#where-secrets-go)
-6. [Adding a New Episode (Manual)](#adding-a-new-episode-manual)
-7. [Adding a New Episode (Automation)](#adding-a-new-episode-automation)
-8. [Episode Structure](#episode-structure)
-9. [YouTube Music / YouTube Podcasts Setup](#youtube-music--youtube-podcasts-setup)
-10. [Manual Configuration Checklist](#manual-configuration-checklist)
-11. [Local Development](#local-development)
-12. [Running Tests](#running-tests)
-13. [Running the Secret Scanner](#running-the-secret-scanner)
+2. [How It Works](#how-it-works)
+3. [Episode Structure](#episode-structure)
+4. [Where Secrets Go](#where-secrets-go)
+5. [Triggering a Digest Manually](#triggering-a-digest-manually)
+6. [Manual Configuration Checklist](#manual-configuration-checklist)
+7. [Local Development](#local-development)
+8. [Running Tests](#running-tests)
+9. [Running the Secret Scanner](#running-the-secret-scanner)
 
 ---
 
@@ -35,343 +34,145 @@ Target length: approximately 5 minutes per episode, published every weekday morn
 ```
 database-daily-podcast/
 │
-├── .gitignore                    # Excludes secrets, credentials, caches
+├── .gitignore                     # Excludes secrets, credentials, caches
 ├── .github/
 │   └── workflows/
-│       └── validate.yml          # CI: secret scan + tests + Pages deploy
+│       ├── validate.yml           # CI: secret scan + tests (push/PR)
+│       └── publish_episode.yml    # Production: research → digest → email → commit
 │
-├── SECURITY.md                   # Security policy and credential handling
-├── README.md                     # This file
-├── requirements.txt              # Python dependencies (pyyaml, pytest)
-├── podcast.yaml                  # Podcast-level configuration (NO secrets)
-│
-├── feed.xml                      # Generated RSS feed (committed, served via Pages)
-│
-├── cover-art/
-│   ├── README.md                 # Instructions for adding cover art
-│   └── cover.jpg                 # Podcast cover art (add this manually)
+├── SECURITY.md                    # Security policy and credential handling
+├── README.md                      # This file
+├── requirements.txt                # Core dependencies (pytest)
+├── requirements-research.txt       # Research/script-generation dependencies
 │
 ├── episodes/
-│   └── YYYY-MM-DD/               # One directory per episode
-│       ├── audio.mp3             # Episode audio file
-│       └── metadata.yaml         # Episode title, date, description, GUID, etc.
+│   └── YYYY-MM-DD/                # One directory per digest, audit trail only
+│       ├── script.txt             # The written digest body
+│       ├── sources.json           # Stories selected, URLs, model used
+│       └── episode.html           # The exact HTML that was emailed
 │
 ├── scripts/
-│   ├── generate_feed.py          # Reads metadata, writes feed.xml
-│   ├── add_episode.py            # Helper: copy audio + write metadata.yaml
-│   └── scan_secrets.py           # Pre-commit secret scanner
+│   ├── research_generate.py       # RSS fetch + primary-source fetch + Claude script gen
+│   ├── generate_email_html.py     # Renders script.txt + sources.json -> episode.html
+│   ├── send_email.py              # Sends episode.html via Gmail SMTP
+│   ├── preflight.py                # Date resolution + idempotency check
+│   └── scan_secrets.py            # Pre-commit secret scanner
 │
 └── tests/
-    ├── test_feed.py              # Full test suite (no real credentials needed)
-    └── fixtures/
-        └── create_test_audio.py  # Generates minimal valid MP3 for tests
+    └── ...                         # Full test suite (no real credentials needed)
 ```
 
 ---
 
-## How RSS Publishing Works
-
-### Flow
+## How It Works
 
 ```
-1. Episode MP3 is generated
+1. scripts/preflight.py
+   - Resolves the episode date (today, Buenos Aires time, unless overridden)
+   - Refuses to regenerate a digest that already exists
          |
          v
-2. scripts/add_episode.py
-   - Creates episodes/YYYY-MM-DD/
-   - Copies audio.mp3 there
-   - Writes metadata.yaml
+2. scripts/research_generate.py
+   - Fetches AWS What's New, AWS Database Blog, Microsoft SQL Server Blog (RSS)
+   - Dedups against every previous episodes/*/sources.json
+   - Fetches each candidate's primary source page (not just the RSS summary)
+   - Calls Claude to select 2-4 DBA/DBRE-relevant stories and write a
+     600-750 word digest, grounded only in the fetched primary-source content
+   - Writes script.txt + sources.json
          |
          v
-3. scripts/generate_feed.py
-   - Reads podcast.yaml (channel config)
-   - Scans all episodes/*/metadata.yaml
-   - Sorts episodes newest-first
-   - Writes feed.xml at the repo root
+3. scripts/generate_email_html.py
+   - Renders script.txt + sources.json into a single self-contained,
+     inline-styled HTML email (episode.html)
          |
          v
-4. git add episodes/YYYY-MM-DD/ feed.xml
-   git commit -m "episode: add 2026-08-10"
-   git push
+4. python scripts/scan_secrets.py && pytest tests/ -v
+   - Both must pass before anything is sent or committed
          |
          v
-5. GitHub Actions (validate.yml) runs:
-   - Secret scanner
-   - Feed validation
-   - Test suite
-   - Deploys to GitHub Pages
+5. scripts/send_email.py
+   - Sends episode.html (plus a plain-text fallback) via Gmail SMTP
+   - Only on success does the workflow continue to the commit step
          |
          v
-6. feed.xml is publicly accessible at:
-   https://YOUR_GITHUB_USERNAME.github.io/database-daily-podcast/feed.xml
+6. git add episodes/YYYY-MM-DD/ && git commit && git push
+   - script.txt / sources.json / episode.html are kept as an audit trail
 ```
 
-### Feed format
-
-`feed.xml` is a standards-compliant RSS 2.0 feed with the iTunes podcast
-namespace (`http://www.itunes.com/dtds/podcast-1.0.dtd`) and Podcasting 2.0
-namespace. It includes:
-
-- `<title>`, `<description>`, `<language>`, `<link>`
-- `<itunes:author>`, `<itunes:type>`, `<itunes:explicit>`, `<itunes:image>`
-- `<itunes:owner>` block (uses `noreply@example.com`, no real email)
-- Per episode: `<title>`, `<description>`, `<pubDate>` (RFC 2822), `<guid>`,
-  `<enclosure url="..." length="..." type="audio/mpeg">`,
-  `<itunes:duration>`, `<itunes:episode>`
-
-### Episode metadata format
-
-Each episode's `metadata.yaml`:
-
-```yaml
-title: "Database Daily - 2026-08-10"
-date: "2026-08-10T07:00:00+00:00"    # ISO 8601 with timezone
-description: |
-  Today: Aurora PostgreSQL 16.4 patch addresses CVE-2026-XXXXX...
-  SQL Server 2025 CU1 released with 47 fixes...
-  PostgreSQL 17 RC1 is out...
-  Why this matters: ...
-audio_file: "audio.mp3"
-duration: "5:12"                     # MM:SS or H:MM:SS
-episode_number: 1
-season: 1
-explicit: false
-guid: "database-daily-2026-08-10"    # Immutable - never change after publishing
-```
-
-**The `guid` must never be changed after an episode is published.** Podcast
-clients use it to track which episodes a listener has already heard.
-
----
-
-## GitHub Pages Decision
-
-### Decision: GitHub Pages from main branch root
-
-The RSS feed and all episode audio files are served directly from GitHub Pages.
-
-**Why this works for this podcast:**
-
-| Factor | Detail |
-|--------|--------|
-| Audio size | ~5 MB per 5-minute episode at 128 kbps |
-| Episodes/month | ~22 |
-| Monthly audio added | ~110 MB/month |
-| GitHub repo soft limit | 1 GB |
-| GitHub Pages bandwidth | 100 GB/month soft limit |
-| Cost | Zero |
-
-At ~110 MB/month, the repository will approach the 1 GB soft limit after
-approximately 9 months of episodes. GitHub's limits are soft recommendations,
-not hard cutoffs — the repository can grow beyond 1 GB. When the repo grows
-large, options include:
-
-- Migrate audio to a free object storage service (Cloudflare R2, Backblaze B2)
-  and update only the RSS feed via Pages — the feed remains tiny forever.
-- Use Git LFS for audio files (adds cost above 1 GB/month free tier).
-- Archive old episodes out of the repo while keeping them accessible via a
-  redirecting URL.
-
-**What is NOT stored in the repo:**
-- No databases, no Docker, no AWS, no paid infrastructure.
-- The entire system runs on GitHub's free tier.
-
-### URL structure
-
-Once configured:
-
-| Resource | URL |
-|----------|-----|
-| RSS feed | `https://YOUR_GITHUB_USERNAME.github.io/database-daily-podcast/feed.xml` |
-| Episode audio | `https://YOUR_GITHUB_USERNAME.github.io/database-daily-podcast/episodes/YYYY-MM-DD/audio.mp3` |
-| Cover art | `https://YOUR_GITHUB_USERNAME.github.io/database-daily-podcast/cover-art/cover.jpg` |
-
----
-
-## What Is Public
-
-Because this repository is public, the following information is visible to anyone:
-
-- All episode audio files (MP3s)
-- All episode metadata (titles, dates, descriptions)
-- The RSS feed (`feed.xml`)
-- All scripts and configuration
-- The podcast cover art
-- Git commit history (including commit messages and author info)
-
-**This is intentional.** The podcast is designed for RSS distribution, which
-requires publicly accessible URLs for all assets.
-
-**What is NOT in the repository:**
-- API keys of any kind
-- Authentication tokens
-- Cloud credentials
-- Email passwords
-- Any personal or private information
-
----
-
-## Where Secrets Go
-
-This podcast infrastructure requires **no runtime secrets** for the core workflow
-(generate → commit → push → Pages).
-
-If future features require credentials, they go in **GitHub Actions Secrets**:
-
-| Future feature | Where the secret lives |
-|----------------|------------------------|
-| Claude API (episode generation) | `ANTHROPIC_API_KEY` in repo Secrets |
-| YouTube Data API | `YOUTUBE_API_KEY` in repo Secrets |
-| Custom domain TLS | Configured in GitHub Pages settings, not in repo |
-
-**Never** put secrets in:
-- `podcast.yaml`
-- Any `metadata.yaml`
-- Any script
-- Any workflow YAML (use `${{ secrets.MY_SECRET }}` references only)
-- The RSS feed
-- Commit messages
-
----
-
-## Adding a New Episode (Manual)
-
-```bash
-# 1. Create episode directory and add audio
-mkdir -p episodes/2026-08-11
-cp /path/to/audio.mp3 episodes/2026-08-11/audio.mp3
-
-# 2. Create metadata.yaml
-cat > episodes/2026-08-11/metadata.yaml << 'EOF'
-title: "Database Daily - 2026-08-11"
-date: "2026-08-11T07:00:00+00:00"
-description: |
-  Today: ...
-audio_file: "audio.mp3"
-duration: "5:08"
-episode_number: 2
-season: 1
-explicit: false
-guid: "database-daily-2026-08-11"
-EOF
-
-# 3. Regenerate feed
-python scripts/generate_feed.py
-
-# 4. Scan for secrets (required before commit)
-python scripts/scan_secrets.py
-
-# 5. Commit and push
-git add episodes/2026-08-11/ feed.xml
-git commit -m "episode: add 2026-08-11"
-git push
-```
-
----
-
-## Adding a New Episode (Automation)
-
-The `add_episode.py` script is designed for the future automation agent:
-
-```bash
-python scripts/add_episode.py \
-    --audio /path/to/generated.mp3 \
-    --date 2026-08-11 \
-    --title "Database Daily - 2026-08-11" \
-    --description "Today we cover Aurora PostgreSQL 16.5, SQL Server 2025 CU2..." \
-    --duration "5:08" \
-    --episode-number 2 \
-    --update-feed
-```
-
-Then commit and push:
-
-```bash
-python scripts/scan_secrets.py
-git add episodes/2026-08-11/ feed.xml
-git commit -m "episode: add 2026-08-11"
-git push
-```
+Everything after step 2 fails safely: if research, rendering, tests, or the
+email send fails, nothing is committed and the episode is not marked as
+published — the next scheduled run will try again for the same date.
 
 ---
 
 ## Episode Structure
 
-Each episode targets approximately 5 minutes. Suggested structure:
+Each digest targets 600-750 written words. Suggested structure:
 
-1. **Introduction** (10-15 sec) — brief welcome
-2. **Amazon Aurora news** — new releases, security, performance, pricing
-3. **SQL Server news** — SQL Server only (not Azure SQL DB/MI unless directly related)
-4. **PostgreSQL news** — core, security, major extensions, ecosystem
-5. **Cross-database item** (optional) — only if genuinely important
-6. **Why this matters** — brief analysis of the most important item(s)
-7. **Closing** (5-10 sec)
+1. **Greeting** — one line, names the date
+2. **2-4 selected stories** — Aurora PostgreSQL, Aurora MySQL, SQL Server,
+   or general DBA/DBRE operational news
+3. For each story: what changed, which versions/environments are affected,
+   why a DBA/DBRE should care, and what (if anything) to check or prepare for
+4. **Sign-off** — one line
 
-Quality rules:
-- Prioritize genuinely new information; skip yesterday's stories
-- Prefer primary sources (official blogs, release notes, CVE databases)
-- Distinguish announcements from actual releases
-- Distinguish rumors from confirmed information
-- Never invent a story or fabricate a source
-- If there is little news, make a shorter episode rather than padding
+Quality rules (enforced by the editorial prompt in `research_generate.py`):
+- Every factual claim must be grounded in the fetched primary-source content —
+  never filled in from general model knowledge
+- PostgreSQL/MySQL stories are only selected when AWS explicitly confirms
+  Aurora relevance (this is not a generic PostgreSQL/MySQL news digest)
+- Developer-only stories (ORM features, SQL tutorials, etc.) are excluded
+  unless they create a direct DBA/DBRE operational impact
+- If a category has no meaningful news that day, it's simply skipped
 
 ---
 
-## YouTube Music / YouTube Podcasts Setup
+## Where Secrets Go
 
-YouTube Podcasts (available in select regions via YouTube Studio) ingests
-standard RSS feeds. As of 2025:
+All secrets live in **GitHub Actions Secrets**, referenced in workflows as
+`${{ secrets.MY_SECRET }}` — never in a script, a workflow literal, or a
+committed file.
 
-### RSS feed requirements for YouTube
+| Secret | Purpose |
+|--------|---------|
+| `ANTHROPIC_API_KEY` | Claude API calls for story selection + digest writing |
+| `GMAIL_ADDRESS` | The Gmail account the digest is sent from |
+| `GMAIL_APP_PASSWORD` | A Google App Password for that account (requires 2-Step Verification; generate at https://myaccount.google.com/apppasswords) |
+| `EMAIL_TO` | *Optional.* Recipient address — defaults to `GMAIL_ADDRESS` (self-send) if unset |
 
-| Requirement | Status |
-|-------------|--------|
-| RSS 2.0 with `<enclosure>` | Included in `feed.xml` |
-| `<itunes:image>` (min 1400x1400 px) | Included; add cover.jpg manually |
-| Audio file publicly accessible | Yes, via GitHub Pages |
-| `<itunes:explicit>` | Included (`false`) |
-| `<itunes:category>` | Included (`Technology`) |
-| HTTPS URLs for all assets | Yes, GitHub Pages provides HTTPS |
-| No authentication on audio URLs | Yes, GitHub Pages is fully public |
+**Never** put secrets in:
+- Any script or workflow YAML literal
+- `sources.json`, `script.txt`, or `episode.html`
+- Commit messages
 
-### What to configure in YouTube Studio manually
+---
 
-1. **Go to YouTube Studio** → **Content** → **Podcasts** (or search for it in the left nav)
-2. Click **"New Podcast"** or **"Add show by RSS feed"**
-3. Enter your RSS feed URL:
-   ```
-   https://YOUR_GITHUB_USERNAME.github.io/database-daily-podcast/feed.xml
-   ```
-4. YouTube will validate the feed and import existing episodes
-5. New episodes are typically picked up within a few hours of the feed updating
-6. You can set a custom podcast description, category, and country in YouTube Studio;
-   these override the RSS values for the YouTube display
+## Triggering a Digest Manually
 
-### Important YouTube notes
+The production workflow (`publish_episode.yml`) runs automatically every
+Monday at 08:00 America/Argentina/Buenos_Aires. To trigger it manually:
 
-- YouTube Podcasts is currently limited to certain countries/regions
-- YouTube does **not** host your audio — it streams from your GitHub Pages URL
-- If you later change the audio URL structure, update the RSS feed first
-- YouTube may cache the feed for up to a few hours; allow time for new episodes to appear
-- Cover art must be square; YouTube will crop non-square images
+1. GitHub → **Actions** → **Publish Episode (Production)** → **Run workflow**
+2. Leave `episode_date` blank to use today, or set it explicitly
+3. Leave `episode_script` blank for automated research, or paste a full
+   digest to bypass research entirely
+4. Optionally set `episode_title` to override the auto-generated title
+
+If a digest for that date already exists, a manual run fails loudly rather
+than overwriting it.
 
 ---
 
 ## Manual Configuration Checklist
 
-After cloning this repository, complete these steps before publishing:
+After cloning this repository, before the first real run:
 
-- [ ] **`podcast.yaml`**: Replace `YOUR_GITHUB_USERNAME` with your real GitHub username
-- [ ] **GitHub Pages**: Enable GitHub Pages in repo Settings → Pages → Source: `Deploy from a branch` or use the workflow
-- [ ] **Cover art**: Add a 1400x1400 px (or larger) square JPEG as `cover-art/cover.jpg`
-- [ ] **Regenerate feed**: Run `python scripts/generate_feed.py` after updating `podcast.yaml`
-- [ ] **Commit feed**: Commit and push `feed.xml` and `cover-art/cover.jpg`
-- [ ] **Verify feed URL**: Visit `https://YOUR_GITHUB_USERNAME.github.io/database-daily-podcast/feed.xml`
-- [ ] **YouTube**: Submit feed URL in YouTube Studio → Content → Podcasts
-
-Optional (for future automation):
-- [ ] Add `ANTHROPIC_API_KEY` to GitHub Actions Secrets (for episode generation)
-- [ ] Add `YOUTUBE_API_KEY` to GitHub Actions Secrets (for YouTube Data API, if needed)
+- [ ] Add `ANTHROPIC_API_KEY` to GitHub Actions Secrets
+- [ ] Enable 2-Step Verification on the sending Gmail account
+- [ ] Generate a Google App Password and add it as `GMAIL_APP_PASSWORD`
+- [ ] Add `GMAIL_ADDRESS` to GitHub Actions Secrets
+- [ ] (Optional) Add `EMAIL_TO` if the recipient differs from `GMAIL_ADDRESS`
+- [ ] Trigger `publish_episode.yml` manually once to confirm an email arrives
 
 ---
 
@@ -379,42 +180,36 @@ Optional (for future automation):
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_GITHUB_USERNAME/database-daily-podcast.git
+git clone https://github.com/cmendiberry/database-daily-podcast.git
 cd database-daily-podcast
 
 # Install dependencies
-pip install -r requirements.txt
-
-# Generate feed from existing episodes
-python scripts/generate_feed.py
+pip install -r requirements.txt -r requirements-research.txt
 
 # Run secret scanner
 python scripts/scan_secrets.py
 
 # Run tests
 pytest tests/ -v
+
+# Render a digest HTML locally from an existing episode
+python scripts/generate_email_html.py \
+    --script-file  episodes/2026-08-10/script.txt \
+    --sources-file episodes/2026-08-10/sources.json \
+    --output       /tmp/preview.html
 ```
 
 ---
 
 ## Running Tests
 
-Tests require no real credentials, API keys, or external services.
+Tests require no real credentials, API keys, or external services — all
+network and SMTP interactions are mocked.
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-research.txt
 pytest tests/ -v
 ```
-
-The test suite:
-1. Creates a minimal valid MP3 in a temp directory
-2. Creates a sample episode with `metadata.yaml`
-3. Generates the RSS feed
-4. Validates the XML structure
-5. Verifies enclosure URL, MIME type, file size, GUID, pubDate
-6. Tests the empty-feed edge case
-7. Tests multi-episode sorting (newest first)
-8. Runs the secret scanner against the real repository
 
 ---
 

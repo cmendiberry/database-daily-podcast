@@ -133,13 +133,18 @@ deprecated, Extended Support only, or not yet generally available.
 
 Never present speculation as fact. Omit rather than guess.
 
-TARGET SCRIPT LENGTH: 600–750 spoken words for a ~5 minute episode.
+TARGET LENGTH: 600–750 words for a short written digest (not spoken/narrated).
 
-FORMAT: Start with a brief intro, e.g.:
-  "Welcome to Database Daily. Today is [full date]. \
-I'm your host, and here is what DBAs and DBREs need to know."
-End with a brief outro, e.g.:
-  "That is all for today's Database Daily. Stay reliable out there."
+FORMAT: This is a written email digest, not a script to be read aloud. Start with
+a brief greeting, e.g.:
+  "Good morning. Here's what DBAs and DBREs need to know today, [full date]."
+End with a brief sign-off, e.g.:
+  "That's today's Database Daily digest. Stay reliable out there."
+
+Also write a short, specific EPISODE TITLE summarizing the day's top story or
+stories (e.g. "Database upgrades: PostgreSQL 19, Aurora PostgreSQL 18, and Aurora
+MySQL 8.4") — this is used as the email subject line and headline, not a generic
+placeholder like "Database Daily – [date]".
 
 Select 2–4 of the strongest DBA/DBRE-relevant stories. Do not force one story per
 category. If a category has no meaningful new development today, skip it.\
@@ -489,9 +494,10 @@ def _build_user_prompt(date_str: str, candidates: list) -> str:
         "is insufficient to explain DBA/DBRE relevance, do not select it.\n\n"
         f"{candidates_text}\n\n"
         "Select 2–4 of the strongest DBA/DBRE-relevant stories. "
-        "Write the complete episode script (600–750 words).\n\n"
+        "Write the complete digest (600–750 words) plus a short episode title.\n\n"
         "Return valid JSON only — no markdown fences, no extra text:\n"
         "{\n"
+        '  "episode_title": "short specific headline for today\'s digest",\n'
         '  "stories_selected": [\n'
         "    {\n"
         '      "title": "story title",\n'
@@ -502,7 +508,7 @@ def _build_user_prompt(date_str: str, candidates: list) -> str:
         '      "dba_relevance": "one sentence on why DBAs need to know this"\n'
         "    }\n"
         "  ],\n"
-        '  "script": "the complete spoken episode script"\n'
+        '  "script": "the complete written digest body"\n'
         "}"
     )
 
@@ -617,7 +623,9 @@ def generate_script(date_str: str, candidates: list, api_key: str) -> dict:
             sys.exit(1)
 
     print(f"  Script: {word_count} words (valid: {SCRIPT_MIN_WORDS}–{SCRIPT_MAX_WORDS})")
+    episode_title = result.get("episode_title", "").strip() or f"Database Daily – {date_str}"
     return {
+        "episode_title": episode_title,
         "script": script,
         "stories_selected": result.get("stories_selected", []),
         "model": MODEL,
