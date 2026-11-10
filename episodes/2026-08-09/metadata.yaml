@@ -1,0 +1,14 @@
+# Database Daily - Episode Metadata
+# Safe for public repositories - no secrets here
+
+title: Aurora PostgreSQL 18, Aurora MySQL 8.4, and the latest SQL Server patching
+date: '2026-08-09T07:00:00+00:00'
+description: A DBA-focused look at Aurora PostgreSQL 18.3, Aurora MySQL 8.4 security
+  and upgrade considerations, extended support for Aurora MySQL 5.7 compatibility,
+  and the latest SQL Server cumulative and security updates.
+audio_file: audio.mp3
+duration: '5:16'
+episode_number: 2
+season: 1
+explicit: false
+guid: database-daily-2026-08-09
