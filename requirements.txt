@@ -4,3 +4,4 @@
 
 # Testing framework
 pytest>=7.0
+pytest-mock>=3.14.0
