@@ -3,7 +3,7 @@
 send_email.py - Send the rendered digest as an email via Gmail SMTP.
 
 Builds a multipart/alternative message (plain-text fallback + HTML body)
-and sends it over SMTP_SSL using a Gmail address and App Password.
+and sends it over STARTTLS using a Gmail address and App Password.
 
 Usage:
     python scripts/send_email.py \\
@@ -28,12 +28,15 @@ import os
 import smtplib
 import ssl
 import sys
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 465
+SMTP_PORT = 587
+MAX_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 5
 
 
 def build_message(subject: str, from_addr: str, to_addr: str, html_body: str, text_body: str) -> MIMEMultipart:
@@ -47,12 +50,38 @@ def build_message(subject: str, from_addr: str, to_addr: str, html_body: str, te
     return message
 
 
-def send(message: MIMEMultipart, address: str, app_password: str) -> None:
-    """Send the message via Gmail SMTP_SSL. Raises on failure."""
+def _send_once(message: MIMEMultipart, address: str, app_password: str) -> None:
+    """Send the message via a single STARTTLS connection. Raises on failure."""
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=context) as server:
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls(context=context)
         server.login(address, app_password)
         server.send_message(message)
+
+
+def send(message: MIMEMultipart, address: str, app_password: str) -> None:
+    """Send the message, retrying on transient connection failures.
+
+    Implicit-SSL (port 465) connections to Gmail intermittently drop from
+    GitHub-hosted runners ("Connection unexpectedly closed"); STARTTLS on
+    587 is more reliable, but a short retry still guards against one-off
+    network blips.
+    """
+    last_error = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            _send_once(message, address, app_password)
+            return
+        except Exception as exc:
+            last_error = exc
+            if attempt < MAX_ATTEMPTS:
+                print(
+                    f"  Send attempt {attempt}/{MAX_ATTEMPTS} failed ({exc}), "
+                    f"retrying in {RETRY_DELAY_SECONDS}s...",
+                    file=sys.stderr,
+                )
+                time.sleep(RETRY_DELAY_SECONDS)
+    raise last_error
 
 
 def main() -> None:

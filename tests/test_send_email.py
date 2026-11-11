@@ -1,14 +1,15 @@
 """
 test_send_email.py - Tests for scripts/send_email.py
 
-No network access — smtplib.SMTP_SSL is replaced with a fake in-process
+No network access — smtplib.SMTP is replaced with a fake in-process
 stand-in for the send() tests. build_message() is tested directly with no
-I/O at all.
+I/O at all. time.sleep is monkeypatched so retry tests run instantly.
 
 Covers:
   - build_message: headers, multipart/alternative with text + html parts
-  - send: logs in and sends via the fake SMTP connection, no real network
-  - send: propagates failures (login error, send error) instead of swallowing them
+  - send: connects via STARTTLS on port 587, logs in, and sends
+  - send: retries on transient failure and succeeds within MAX_ATTEMPTS
+  - send: raises the last error once MAX_ATTEMPTS is exhausted
   - CLI: missing GMAIL_ADDRESS / GMAIL_APP_PASSWORD exits 1
   - CLI: EMAIL_TO defaults to GMAIL_ADDRESS when unset
 """
@@ -60,18 +61,31 @@ class TestBuildMessage:
 # ---------------------------------------------------------------------------
 
 
-class FakeSMTPSSL:
-    """Stand-in for smtplib.SMTP_SSL that records calls instead of connecting."""
+class FakeSMTP:
+    """Stand-in for smtplib.SMTP that records calls instead of connecting.
+
+    fail_count controls how many constructions raise before one succeeds,
+    simulating a transient connection failure that later retries recover
+    from.
+    """
 
     instances = []
+    fail_count = 0
 
-    def __init__(self, host, port, context=None):
+    def __init__(self, host, port):
+        if FakeSMTP.fail_count > 0:
+            FakeSMTP.fail_count -= 1
+            raise OSError("Connection unexpectedly closed")
         self.host = host
         self.port = port
+        self.starttls_calls = []
         self.login_calls = []
         self.sent_messages = []
         self.quit_called = False
-        FakeSMTPSSL.instances.append(self)
+        FakeSMTP.instances.append(self)
+
+    def starttls(self, context=None):
+        self.starttls_calls.append(context)
 
     def login(self, address, app_password):
         self.login_calls.append((address, app_password))
@@ -87,39 +101,69 @@ class FakeSMTPSSL:
         return False
 
 
-class FailingLoginSMTPSSL(FakeSMTPSSL):
+class AlwaysFailingSMTP(FakeSMTP):
+    def __init__(self, host, port):
+        raise OSError("Connection unexpectedly closed")
+
+
+class FailingLoginSMTP(FakeSMTP):
     def login(self, address, app_password):
         raise OSError("auth failed")
 
 
 @pytest.fixture(autouse=True)
 def _reset_fake_instances():
-    FakeSMTPSSL.instances = []
+    FakeSMTP.instances = []
+    FakeSMTP.fail_count = 0
     yield
-    FakeSMTPSSL.instances = []
+    FakeSMTP.instances = []
+    FakeSMTP.fail_count = 0
+
+
+@pytest.fixture(autouse=True)
+def _no_real_sleep(monkeypatch):
+    monkeypatch.setattr("send_email.time.sleep", lambda seconds: None)
 
 
 class TestSend:
-    def test_logs_in_and_sends(self, monkeypatch):
-        monkeypatch.setattr("send_email.smtplib.SMTP_SSL", FakeSMTPSSL)
+    def test_connects_via_starttls_logs_in_and_sends(self, monkeypatch):
+        monkeypatch.setattr("send_email.smtplib.SMTP", FakeSMTP)
         msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
 
         send(msg, "me@gmail.com", "app-password")
 
-        assert len(FakeSMTPSSL.instances) == 1
-        instance = FakeSMTPSSL.instances[0]
+        assert len(FakeSMTP.instances) == 1
+        instance = FakeSMTP.instances[0]
         assert instance.host == "smtp.gmail.com"
-        assert instance.port == 465
+        assert instance.port == 587
+        assert len(instance.starttls_calls) == 1
         assert instance.login_calls == [("me@gmail.com", "app-password")]
         assert instance.sent_messages == [msg]
         assert instance.quit_called is True
 
     def test_propagates_login_failure(self, monkeypatch):
-        monkeypatch.setattr("send_email.smtplib.SMTP_SSL", FailingLoginSMTPSSL)
+        monkeypatch.setattr("send_email.smtplib.SMTP", FailingLoginSMTP)
         msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
 
         with pytest.raises(OSError):
             send(msg, "me@gmail.com", "wrong-password")
+
+    def test_retries_and_succeeds_after_transient_failure(self, monkeypatch):
+        monkeypatch.setattr("send_email.smtplib.SMTP", FakeSMTP)
+        FakeSMTP.fail_count = 1  # first attempt fails, second succeeds
+        msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
+
+        send(msg, "me@gmail.com", "app-password")
+
+        assert len(FakeSMTP.instances) == 1
+        assert FakeSMTP.instances[0].sent_messages == [msg]
+
+    def test_raises_after_exhausting_retries(self, monkeypatch):
+        monkeypatch.setattr("send_email.smtplib.SMTP", AlwaysFailingSMTP)
+        msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
+
+        with pytest.raises(OSError, match="Connection unexpectedly closed"):
+            send(msg, "me@gmail.com", "app-password")
 
 
 # ---------------------------------------------------------------------------

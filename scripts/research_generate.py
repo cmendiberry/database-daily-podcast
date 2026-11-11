@@ -3,14 +3,13 @@
 research_generate.py - Research authoritative database news and generate episode script.
 
 FLOW (automated):
-  1. Load previously used source URLs/titles from episodes/*/sources.json (dedup)
-  2. Fetch RSS feeds for discovery
-  3. Filter by keywords, age window, and cross-episode deduplication
-  4. Fetch primary source page content for each candidate
-  5. Drop candidates whose source page cannot be retrieved or is too thin
-  6. Call Claude with full primary-source content (not just RSS summaries)
-  7. Validate script length (600–750 words); retry once if outside range
-  8. Write script.txt and sources.json
+  1. Fetch RSS feeds for discovery
+  2. Filter by keywords and age window
+  3. Fetch primary source page content for each candidate
+  4. Drop candidates whose source page cannot be retrieved or is too thin
+  5. Call Claude with full primary-source content (not just RSS summaries)
+  6. Validate script length (600–750 words); retry once if outside range
+  7. Write script.txt and sources.json
 
 FLOW (manual override via EPISODE_SCRIPT env var):
   Skip all research and API calls. Write the supplied text directly.
@@ -22,7 +21,6 @@ Usage:
 Environment:
     ANTHROPIC_API_KEY   required for automated research
     EPISODE_SCRIPT      if non-empty, bypasses research entirely
-    EPISODES_DIR        path to episodes directory (default: episodes)
 
 Exit codes:
     0 - success
@@ -187,28 +185,6 @@ def _extract_text(html: str, max_chars: int = MAX_SOURCE_CONTENT_CHARS) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Title normalisation for cross-episode deduplication
-# ---------------------------------------------------------------------------
-
-_STOP_WORDS = frozenset(
-    "the a an is in on at to for of and or with new now available this that are was"
-    " has have been will be from by its".split()
-)
-
-
-def _normalize_title(title: str) -> str:
-    """
-    Normalise a story title for duplicate detection.
-    Lower-cases, removes punctuation, strips common stop words.
-    """
-    title = title.lower()
-    title = re.sub(r"[^\w\s]", " ", title)
-    title = re.sub(r"\s+", " ", title).strip()
-    words = [w for w in title.split() if w not in _STOP_WORDS]
-    return " ".join(words)
-
-
-# ---------------------------------------------------------------------------
 # Feed entry date parsing
 # ---------------------------------------------------------------------------
 
@@ -247,61 +223,6 @@ def _validate_script_length(script: str) -> "tuple[bool, int]":
     """Return (is_valid, word_count). Valid range: SCRIPT_MIN_WORDS–SCRIPT_MAX_WORDS."""
     count = len(script.split())
     return (SCRIPT_MIN_WORDS <= count <= SCRIPT_MAX_WORDS), count
-
-
-# ---------------------------------------------------------------------------
-# Cross-episode deduplication
-# ---------------------------------------------------------------------------
-
-
-def load_used_stories(episodes_dir: Path) -> dict:
-    """
-    Scan all episodes/*/sources.json files and build a dedup set.
-
-    Returns:
-        {
-          "urls": set of previously used source URLs,
-          "normalized_titles": set of normalised story titles,
-        }
-    """
-    used_urls: set = set()
-    used_normalized_titles: set = set()
-
-    if not episodes_dir.exists():
-        return {"urls": used_urls, "normalized_titles": used_normalized_titles}
-
-    for sources_file in sorted(episodes_dir.glob("*/sources.json")):
-        try:
-            data = json.loads(sources_file.read_text(encoding="utf-8"))
-            for story in data.get("stories_selected", []):
-                url = story.get("url", "").strip()
-                if url:
-                    used_urls.add(url)
-                title = story.get("title", "").strip()
-                if title:
-                    norm = _normalize_title(title)
-                    if norm:
-                        used_normalized_titles.add(norm)
-        except Exception:
-            pass  # Skip malformed files silently
-
-    return {"urls": used_urls, "normalized_titles": used_normalized_titles}
-
-
-def is_duplicate(item: dict, used: dict) -> bool:
-    """
-    Return True if this item has already been covered in a previous episode.
-    Checks exact URL match first, then normalised title match.
-    """
-    url = item.get("url", "").strip()
-    if url and url in used["urls"]:
-        return True
-    title = item.get("title", "").strip()
-    if title:
-        norm = _normalize_title(title)
-        if norm and norm in used["normalized_titles"]:
-            return True
-    return False
 
 
 # ---------------------------------------------------------------------------
@@ -704,17 +625,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    episodes_dir = Path(os.environ.get("EPISODES_DIR", "episodes"))
-
-    # 1. Load cross-episode dedup data
-    print("Loading cross-episode deduplication data...")
-    used_stories = load_used_stories(episodes_dir)
-    print(
-        f"  Previously covered: {len(used_stories['urls'])} URLs, "
-        f"{len(used_stories['normalized_titles'])} titles (normalized)"
-    )
-
-    # 2. Fetch RSS feeds
+    # 1. Fetch RSS feeds
     print(f"Fetching research feeds (window: {RESEARCH_WINDOW_DAYS} days)...")
     all_items = fetch_all_feeds()
 
@@ -726,29 +637,18 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # 3. Collect and deduplicate candidates
-    candidates = []
-    skipped_dedup = 0
-    for data in all_items.values():
-        for item in data["items"]:
-            if is_duplicate(item, used_stories):
-                print(f"  DEDUP: {item['title'][:70]}")
-                skipped_dedup += 1
-            else:
-                candidates.append(item)
+    # 2. Collect candidates
+    candidates = [item for data in all_items.values() for item in data["items"]]
 
     # Sort most-recent first, cap at MAX_CANDIDATES_TO_FETCH
     candidates.sort(key=lambda x: x.get("published", ""), reverse=True)
     if len(candidates) > MAX_CANDIDATES_TO_FETCH:
-        print(
-            f"  Capping at {MAX_CANDIDATES_TO_FETCH} most recent "
-            f"(of {len(candidates)} after dedup)"
-        )
+        print(f"  Capping at {MAX_CANDIDATES_TO_FETCH} most recent (of {len(candidates)})")
         candidates = candidates[:MAX_CANDIDATES_TO_FETCH]
 
-    print(f"Candidates after dedup: {len(candidates)} (excluded {skipped_dedup} duplicates)")
+    print(f"Candidates: {len(candidates)}")
 
-    # 4. Fetch primary source content
+    # 3. Fetch primary source content
     print("Fetching primary source content...")
     candidates_with_content = fetch_candidate_content(candidates)
     print(f"Candidates with sufficient content: {len(candidates_with_content)}")
@@ -761,11 +661,11 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # 5. Generate script
+    # 4. Generate script
     print("Generating script via Claude API...")
     result = generate_script(date_str, candidates_with_content, api_key)
 
-    # 6. Write outputs
+    # 5. Write outputs
     sources_consulted = [
         {
             "source": name,
@@ -786,9 +686,8 @@ def main() -> None:
             "stories_selected": result["stories_selected"],
             "model": result["model"],
             "research_stats": {
-                "candidates_after_dedup": len(candidates),
+                "candidates": len(candidates),
                 "candidates_with_content": len(candidates_with_content),
-                "skipped_dedup": skipped_dedup,
             },
         },
     )

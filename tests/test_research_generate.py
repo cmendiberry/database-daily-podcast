@@ -5,11 +5,9 @@ No API calls, no network requests, no TTS dependencies.
 
 Covers:
   - HTML utilities: _clean_html, _extract_text
-  - Title normalisation for dedup: _normalize_title
   - Feed keyword filter: _item_matches_keywords
   - Entry date parsing: _parse_entry_date
   - Script length validation: _validate_script_length (600–750 words)
-  - Cross-episode deduplication: load_used_stories, is_duplicate
   - Source content sufficiency: is_sufficient_content
   - Primary source fetching failure / insufficient content: fetch_candidate_content
   - Output writing: write_outputs
@@ -42,13 +40,10 @@ from research_generate import (
     _clean_html,
     _extract_text,
     _item_matches_keywords,
-    _normalize_title,
     _parse_entry_date,
     _validate_script_length,
     fetch_candidate_content,
-    is_duplicate,
     is_sufficient_content,
-    load_used_stories,
     write_outputs,
 )
 
@@ -101,33 +96,6 @@ class TestExtractText:
         assert "<" not in result
         assert "Title" in result
         assert "Body" in result
-
-
-# ---------------------------------------------------------------------------
-# _normalize_title
-# ---------------------------------------------------------------------------
-
-
-class TestNormalizeTitle:
-    def test_lowercases(self):
-        assert "aurora" in _normalize_title("AURORA PostgreSQL")
-
-    def test_removes_punctuation(self):
-        result = _normalize_title("Aurora PostgreSQL: New Version!")
-        assert ":" not in result
-        assert "!" not in result
-
-    def test_removes_stop_words(self):
-        result = _normalize_title("the new aurora feature is now available")
-        tokens = result.split()
-        assert "the" not in tokens
-        assert "is" not in tokens
-        assert "aurora" in tokens
-
-    def test_collapses_whitespace(self):
-        result = _normalize_title("  aurora   postgresql  ")
-        assert "  " not in result
-        assert result == result.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -232,93 +200,6 @@ class TestValidateScriptLength:
         valid, count = _validate_script_length("")
         assert valid is False
         assert count == 0
-
-
-# ---------------------------------------------------------------------------
-# load_used_stories
-# ---------------------------------------------------------------------------
-
-
-class TestLoadUsedStories:
-    def _make_sources(self, ep_dir: Path, stories: list) -> None:
-        ep_dir.mkdir(parents=True, exist_ok=True)
-        data = {"stories_selected": stories}
-        (ep_dir / "sources.json").write_text(
-            json.dumps(data), encoding="utf-8"
-        )
-
-    def test_loads_urls_from_sources_json(self, tmp_path):
-        self._make_sources(
-            tmp_path / "2026-08-10",
-            [{"url": "https://example.com/story", "title": "Test Story"}],
-        )
-        used = load_used_stories(tmp_path)
-        assert "https://example.com/story" in used["urls"]
-
-    def test_loads_normalized_titles(self, tmp_path):
-        self._make_sources(
-            tmp_path / "2026-08-10",
-            [{"url": "https://example.com", "title": "Aurora PostgreSQL Released"}],
-        )
-        used = load_used_stories(tmp_path)
-        assert len(used["normalized_titles"]) > 0
-
-    def test_multiple_episodes_combined(self, tmp_path):
-        self._make_sources(
-            tmp_path / "2026-08-09",
-            [{"url": "https://a.com", "title": "Story A"}],
-        )
-        self._make_sources(
-            tmp_path / "2026-08-10",
-            [{"url": "https://b.com", "title": "Story B"}],
-        )
-        used = load_used_stories(tmp_path)
-        assert "https://a.com" in used["urls"]
-        assert "https://b.com" in used["urls"]
-
-    def test_missing_sources_json_skipped(self, tmp_path):
-        (tmp_path / "2026-08-10").mkdir()  # No sources.json
-        used = load_used_stories(tmp_path)
-        assert len(used["urls"]) == 0
-
-    def test_nonexistent_episodes_dir(self, tmp_path):
-        used = load_used_stories(tmp_path / "nonexistent")
-        assert used == {"urls": set(), "normalized_titles": set()}
-
-
-# ---------------------------------------------------------------------------
-# is_duplicate
-# ---------------------------------------------------------------------------
-
-
-class TestIsDuplicate:
-    def test_exact_url_match(self):
-        used = {"urls": {"https://example.com/story"}, "normalized_titles": set()}
-        item = {"url": "https://example.com/story", "title": "New Story"}
-        assert is_duplicate(item, used) is True
-
-    def test_normalized_title_match(self):
-        # Build the normalized title that _normalize_title would produce
-        norm = _normalize_title("Aurora PostgreSQL Version Released")
-        used = {"urls": set(), "normalized_titles": {norm}}
-        item = {"url": "https://other.com/page", "title": "Aurora PostgreSQL Version Released"}
-        assert is_duplicate(item, used) is True
-
-    def test_no_match(self):
-        used = {"urls": {"https://other.com"}, "normalized_titles": {"something else"}}
-        item = {"url": "https://example.com/new", "title": "Aurora PostgreSQL New Feature"}
-        assert is_duplicate(item, used) is False
-
-    def test_empty_used_set(self):
-        used = {"urls": set(), "normalized_titles": set()}
-        item = {"url": "https://example.com", "title": "Any Story"}
-        assert is_duplicate(item, used) is False
-
-    def test_different_url_same_title_flagged(self):
-        norm = _normalize_title("Aurora MySQL End of Life")
-        used = {"urls": set(), "normalized_titles": {norm}}
-        item = {"url": "https://completely-different.com", "title": "Aurora MySQL End of Life"}
-        assert is_duplicate(item, used) is True
 
 
 # ---------------------------------------------------------------------------

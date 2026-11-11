@@ -74,7 +74,6 @@ database-daily-podcast/
          v
 2. scripts/research_generate.py
    - Fetches AWS What's New, AWS Database Blog, Microsoft SQL Server Blog (RSS)
-   - Dedups against every previous episodes/*/sources.json
    - Fetches each candidate's primary source page (not just the RSS summary)
    - Calls Claude to select 2-4 DBA/DBRE-relevant stories and write a
      600-750 word digest, grounded only in the fetched primary-source content
