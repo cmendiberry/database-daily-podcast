@@ -582,6 +582,9 @@ def generate_script(date_str: str, candidates: list, api_key: str) -> dict:
 
     if not valid:
         # --- Retry with length correction ---
+        # A precise numeric target (rather than an open-ended "longer"/"shorter")
+        # keeps the single retry from overshooting past the opposite boundary.
+        target = (SCRIPT_MIN_WORDS + SCRIPT_MAX_WORDS) // 2
         direction = (
             "shorter — cut non-essential content"
             if word_count > SCRIPT_MAX_WORDS
@@ -590,7 +593,9 @@ def generate_script(date_str: str, candidates: list, api_key: str) -> dict:
         correction = (
             f"Your script has {word_count} words. "
             f"The required range is {SCRIPT_MIN_WORDS}–{SCRIPT_MAX_WORDS} words. "
-            f"Please rewrite it to be {direction}. "
+            f"Please rewrite it to be {direction}, landing as close as possible to "
+            f"{target} words — do not just barely clear the boundary, since this is "
+            "your only retry and overshooting past the other end will fail validation. "
             "Keep all selected stories and their source URLs. "
             "Return the complete JSON structure with the corrected script."
         )
