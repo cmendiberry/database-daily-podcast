@@ -17,7 +17,7 @@ on:
 
 jobs:
   validate:
-    name: Validate Feed & Security
+    name: Validate & Security
     runs-on: ubuntu-latest
 
     steps:
@@ -40,68 +40,7 @@ jobs:
         run: python scripts/scan_secrets.py
 
       # -----------------------------------------------------------------------
-      # Step 2: Regenerate feed from current episode metadata
-      # -----------------------------------------------------------------------
-      - name: Generate RSS feed
-        run: python scripts/generate_feed.py
-
-      # -----------------------------------------------------------------------
-      # Step 3: Validate the generated feed.xml is well-formed XML
-      # -----------------------------------------------------------------------
-      - name: Validate RSS XML is well-formed
-        run: python scripts/validate_feed.py
-
-      # -----------------------------------------------------------------------
-      # Step 4: Run the full test suite
+      # Step 2: Run the full test suite
       # -----------------------------------------------------------------------
       - name: Run tests
         run: pytest tests/ -v --tb=short
-
-
-  # ---------------------------------------------------------------------------
-  # Publish to GitHub Pages (only on push to main)
-  # ---------------------------------------------------------------------------
-  publish:
-    name: Publish to GitHub Pages
-    runs-on: ubuntu-latest
-    needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Generate RSS feed
-        run: python scripts/generate_feed.py
-
-      - name: Generate index page
-        run: python scripts/generate_index.py
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v6
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          # Serve the entire repository root as the Pages site
-          path: "."
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5

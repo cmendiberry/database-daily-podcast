@@ -1,0 +1,9 @@
+# Database Daily - Research and script generation dependencies
+# Used by: publish_episode.yml (automated research step only)
+# Install with: pip install -r requirements-research.txt
+
+# Anthropic Claude API client
+anthropic>=0.40.0
+
+# RSS/Atom feed parser (pure Python, no system deps)
+feedparser>=6.0.11

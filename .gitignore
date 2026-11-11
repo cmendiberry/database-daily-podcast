@@ -124,5 +124,5 @@ logs/
 /tests/temp/
 /tests/output/
 
-# NOTE: feed.xml IS committed intentionally (generated artifact served via Pages)
-# NOTE: episodes/**/audio.mp3 ARE committed intentionally (served via Pages)
+# NOTE: episodes/**/{script.txt,sources.json,episode.html} ARE committed
+#       intentionally — they are the audit trail for each emailed digest.
