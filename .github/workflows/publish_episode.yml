@@ -30,7 +30,7 @@
 #   2. HTML digest rendering
 #   3. Secret scan
 #   4. Complete pytest suite
-#   5. Email actually sent via Gmail SMTP
+#   5. Email actually sent via the Resend API
 # Only then: git commit → git push.
 #
 # SCHEDULE
@@ -226,9 +226,9 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Send email
         env:
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          RESEND_FROM: ${{ secrets.RESEND_FROM }}
         run: |
           python scripts/send_email.py \
             --html-file   "${GENERATED_DIR}/episode.html" \

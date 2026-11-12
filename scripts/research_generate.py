@@ -3,14 +3,13 @@
 research_generate.py - Research authoritative database news and generate episode script.
 
 FLOW (automated):
-  1. Load previously used source URLs/titles from episodes/*/sources.json (dedup)
-  2. Fetch RSS feeds for discovery
-  3. Filter by keywords, age window, and cross-episode deduplication
-  4. Fetch primary source page content for each candidate
-  5. Drop candidates whose source page cannot be retrieved or is too thin
-  6. Call Claude with full primary-source content (not just RSS summaries)
-  7. Validate script length (600–750 words); retry once if outside range
-  8. Write script.txt and sources.json
+  1. Fetch RSS feeds for discovery
+  2. Filter by keywords and age window
+  3. Fetch primary source page content for each candidate
+  4. Drop candidates whose source page cannot be retrieved or is too thin
+  5. Call Claude with full primary-source content (not just RSS summaries)
+  6. Validate script length (150–250 words); retry once if outside range
+  7. Write script.txt and sources.json
 
 FLOW (manual override via EPISODE_SCRIPT env var):
   Skip all research and API calls. Write the supplied text directly.
@@ -22,7 +21,6 @@ Usage:
 Environment:
     ANTHROPIC_API_KEY   required for automated research
     EPISODE_SCRIPT      if non-empty, bypasses research entirely
-    EPISODES_DIR        path to episodes directory (default: episodes)
 
 Exit codes:
     0 - success
@@ -72,8 +70,8 @@ SOURCE_FETCH_TIMEOUT = 15
 MAX_SOURCE_CONTENT_CHARS = 4000   # Per candidate primary source page
 MIN_SOURCE_CONTENT_CHARS = 300    # Below this the page is considered insufficient
 MAX_CANDIDATES_TO_FETCH = 15      # Cap to keep prompt size and fetch time reasonable
-SCRIPT_MIN_WORDS = 600
-SCRIPT_MAX_WORDS = 750
+SCRIPT_MIN_WORDS = 150
+SCRIPT_MAX_WORDS = 250
 MODEL = "claude-sonnet-4-6"
 
 # ---------------------------------------------------------------------------
@@ -81,7 +79,7 @@ MODEL = "claude-sonnet-4-6"
 # ---------------------------------------------------------------------------
 
 EDITORIAL_SYSTEM_PROMPT = """\
-You are the script writer for Database Daily, a short weekday podcast for DBAs and \
+You are the writer for Database Daily, a short weekly email digest for DBAs and \
 DBREs responsible for production database environments.
 
 PRIORITY ORDER for story selection:
@@ -110,38 +108,38 @@ source content explicitly confirms relevance to Amazon Aurora supported or compa
 versions, or directly enables Aurora upgrade or operational planning. The primary
 authoritative source for Aurora PostgreSQL and Aurora MySQL news is AWS itself.
 If Aurora relevance is not clearly stated in the provided source content, reject
-the story. The podcast is NOT a generic PostgreSQL or MySQL news podcast.
+the story. This digest is NOT a generic PostgreSQL or MySQL news digest.
 
-GROUNDING RULE: Every factual claim in the script MUST be supported by the PRIMARY
-SOURCE CONTENT provided below. Do not supplement from your general training knowledge.
+GROUNDING RULE: Every factual claim MUST be supported by the PRIMARY SOURCE
+CONTENT provided below. Do not supplement from your general training knowledge.
 If a specific version number, date, feature name, or technical detail is not present
 in the source content, omit it rather than guess. If a candidate story's source
 content is insufficient to clearly explain DBA/DBRE relevance, do not select it.
 
-For each selected story explain in the script:
-  1. What changed?
-  2. Which database versions / environments are affected?
-  3. Why should a DBA or DBRE care?
-  4. Is there anything they should check, patch, upgrade, configure, or prepare for?
-
 Do not merely read release notes — translate announcements into operational consequences.
 
-TONE: Concise, technical, practical, factual, vendor-neutral.
+TONE: Concise, practical, factual, vendor-neutral.
 
 Always state clearly when something is: preview, beta, region-specific, version-specific,
 deprecated, Extended Support only, or not yet generally available.
 
 Never present speculation as fact. Omit rather than guess.
 
-TARGET LENGTH: 600–750 words for a short written digest (not spoken/narrated).
+TARGET LENGTH: 150–250 words. This is a brief, high-level overview — NOT a
+detailed walkthrough. Name the selected stories and give one sentence of context
+on why this week's news matters as a whole. Do not restate each story's full
+technical detail here (version numbers, exact upgrade steps, affected
+environments); that level of detail belongs in each story's one-line
+"dba_relevance" field instead, and the reader can follow the source link for
+anything deeper.
 
 FORMAT: This is a written email digest, not a script to be read aloud. Start with
 a brief greeting, e.g.:
-  "Good morning. Here's what DBAs and DBREs need to know today, [full date]."
+  "Good morning. Here's this week's Database Daily, [full date]."
 End with a brief sign-off, e.g.:
-  "That's today's Database Daily digest. Stay reliable out there."
+  "That's this week's Database Daily digest. Stay reliable out there."
 
-Also write a short, specific EPISODE TITLE summarizing the day's top story or
+Also write a short, specific EPISODE TITLE summarizing the week's top story or
 stories (e.g. "Database upgrades: PostgreSQL 19, Aurora PostgreSQL 18, and Aurora
 MySQL 8.4") — this is used as the email subject line and headline, not a generic
 placeholder like "Database Daily – [date]".
@@ -187,28 +185,6 @@ def _extract_text(html: str, max_chars: int = MAX_SOURCE_CONTENT_CHARS) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Title normalisation for cross-episode deduplication
-# ---------------------------------------------------------------------------
-
-_STOP_WORDS = frozenset(
-    "the a an is in on at to for of and or with new now available this that are was"
-    " has have been will be from by its".split()
-)
-
-
-def _normalize_title(title: str) -> str:
-    """
-    Normalise a story title for duplicate detection.
-    Lower-cases, removes punctuation, strips common stop words.
-    """
-    title = title.lower()
-    title = re.sub(r"[^\w\s]", " ", title)
-    title = re.sub(r"\s+", " ", title).strip()
-    words = [w for w in title.split() if w not in _STOP_WORDS]
-    return " ".join(words)
-
-
-# ---------------------------------------------------------------------------
 # Feed entry date parsing
 # ---------------------------------------------------------------------------
 
@@ -250,61 +226,6 @@ def _validate_script_length(script: str) -> "tuple[bool, int]":
 
 
 # ---------------------------------------------------------------------------
-# Cross-episode deduplication
-# ---------------------------------------------------------------------------
-
-
-def load_used_stories(episodes_dir: Path) -> dict:
-    """
-    Scan all episodes/*/sources.json files and build a dedup set.
-
-    Returns:
-        {
-          "urls": set of previously used source URLs,
-          "normalized_titles": set of normalised story titles,
-        }
-    """
-    used_urls: set = set()
-    used_normalized_titles: set = set()
-
-    if not episodes_dir.exists():
-        return {"urls": used_urls, "normalized_titles": used_normalized_titles}
-
-    for sources_file in sorted(episodes_dir.glob("*/sources.json")):
-        try:
-            data = json.loads(sources_file.read_text(encoding="utf-8"))
-            for story in data.get("stories_selected", []):
-                url = story.get("url", "").strip()
-                if url:
-                    used_urls.add(url)
-                title = story.get("title", "").strip()
-                if title:
-                    norm = _normalize_title(title)
-                    if norm:
-                        used_normalized_titles.add(norm)
-        except Exception:
-            pass  # Skip malformed files silently
-
-    return {"urls": used_urls, "normalized_titles": used_normalized_titles}
-
-
-def is_duplicate(item: dict, used: dict) -> bool:
-    """
-    Return True if this item has already been covered in a previous episode.
-    Checks exact URL match first, then normalised title match.
-    """
-    url = item.get("url", "").strip()
-    if url and url in used["urls"]:
-        return True
-    title = item.get("title", "").strip()
-    if title:
-        norm = _normalize_title(title)
-        if norm and norm in used["normalized_titles"]:
-            return True
-    return False
-
-
-# ---------------------------------------------------------------------------
 # Primary source content fetching
 # ---------------------------------------------------------------------------
 
@@ -327,7 +248,7 @@ def fetch_source_content(url: str, timeout: int = SOURCE_FETCH_TIMEOUT) -> "str 
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (compatible; DatabaseDailyBot/1.0; "
-                    "podcast research bot)"
+                    "digest research bot)"
                 ),
                 "Accept": "text/html,application/xhtml+xml,*/*",
                 "Accept-Language": "en-US,en;q=0.9",
@@ -405,7 +326,7 @@ def fetch_all_feeds(max_age_days: int = RESEARCH_WINDOW_DAYS, timeout: int = FEE
         try:
             feed = feedparser.parse(
                 url,
-                request_headers={"User-Agent": "DatabaseDailyBot/1.0 podcast-research"},
+                request_headers={"User-Agent": "DatabaseDailyBot/1.0 digest-research"},
             )
             if feed.get("bozo") and not feed.entries:
                 raise ValueError(f"Feed parse error: {feed.get('bozo_exception', 'unknown')}")
@@ -494,7 +415,9 @@ def _build_user_prompt(date_str: str, candidates: list) -> str:
         "is insufficient to explain DBA/DBRE relevance, do not select it.\n\n"
         f"{candidates_text}\n\n"
         "Select 2–4 of the strongest DBA/DBRE-relevant stories. "
-        "Write the complete digest (600–750 words) plus a short episode title.\n\n"
+        "Write the brief overview (150–250 words) plus a short episode title. "
+        "The real per-story substance goes in each story's dba_relevance field, "
+        "not the overview.\n\n"
         "Return valid JSON only — no markdown fences, no extra text:\n"
         "{\n"
         '  "episode_title": "short specific headline for today\'s digest",\n'
@@ -505,10 +428,11 @@ def _build_user_prompt(date_str: str, candidates: list) -> str:
         '      "source": "source name",\n'
         '      "published": "YYYY-MM-DD",\n'
         '      "category": "Aurora PostgreSQL | Aurora MySQL | SQL Server | General DBA",\n'
-        '      "dba_relevance": "one sentence on why DBAs need to know this"\n'
+        '      "dba_relevance": "1-2 sentences: what changed and what a DBA/DBRE '
+        'should check, patch, or prepare for -- the reader follows the URL for full depth"\n'
         "    }\n"
         "  ],\n"
-        '  "script": "the complete written digest body"\n'
+        '  "script": "the brief 150-250 word overview"\n'
         "}"
     )
 
@@ -552,7 +476,7 @@ def _parse_json_response(response_text: str) -> dict:
 def generate_script(date_str: str, candidates: list, api_key: str) -> dict:
     """
     Call Claude to select stories and write the episode script.
-    Validates length (600–750 words); retries once with correction if out of range.
+    Validates length (150–250 words); retries once with correction if out of range.
 
     Returns:
         {"script": str, "stories_selected": list, "model": str}
@@ -704,17 +628,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    episodes_dir = Path(os.environ.get("EPISODES_DIR", "episodes"))
-
-    # 1. Load cross-episode dedup data
-    print("Loading cross-episode deduplication data...")
-    used_stories = load_used_stories(episodes_dir)
-    print(
-        f"  Previously covered: {len(used_stories['urls'])} URLs, "
-        f"{len(used_stories['normalized_titles'])} titles (normalized)"
-    )
-
-    # 2. Fetch RSS feeds
+    # 1. Fetch RSS feeds
     print(f"Fetching research feeds (window: {RESEARCH_WINDOW_DAYS} days)...")
     all_items = fetch_all_feeds()
 
@@ -726,29 +640,18 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # 3. Collect and deduplicate candidates
-    candidates = []
-    skipped_dedup = 0
-    for data in all_items.values():
-        for item in data["items"]:
-            if is_duplicate(item, used_stories):
-                print(f"  DEDUP: {item['title'][:70]}")
-                skipped_dedup += 1
-            else:
-                candidates.append(item)
+    # 2. Collect candidates
+    candidates = [item for data in all_items.values() for item in data["items"]]
 
     # Sort most-recent first, cap at MAX_CANDIDATES_TO_FETCH
     candidates.sort(key=lambda x: x.get("published", ""), reverse=True)
     if len(candidates) > MAX_CANDIDATES_TO_FETCH:
-        print(
-            f"  Capping at {MAX_CANDIDATES_TO_FETCH} most recent "
-            f"(of {len(candidates)} after dedup)"
-        )
+        print(f"  Capping at {MAX_CANDIDATES_TO_FETCH} most recent (of {len(candidates)})")
         candidates = candidates[:MAX_CANDIDATES_TO_FETCH]
 
-    print(f"Candidates after dedup: {len(candidates)} (excluded {skipped_dedup} duplicates)")
+    print(f"Candidates: {len(candidates)}")
 
-    # 4. Fetch primary source content
+    # 3. Fetch primary source content
     print("Fetching primary source content...")
     candidates_with_content = fetch_candidate_content(candidates)
     print(f"Candidates with sufficient content: {len(candidates_with_content)}")
@@ -761,11 +664,11 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # 5. Generate script
+    # 4. Generate script
     print("Generating script via Claude API...")
     result = generate_script(date_str, candidates_with_content, api_key)
 
-    # 6. Write outputs
+    # 5. Write outputs
     sources_consulted = [
         {
             "source": name,
@@ -786,9 +689,8 @@ def main() -> None:
             "stories_selected": result["stories_selected"],
             "model": result["model"],
             "research_stats": {
-                "candidates_after_dedup": len(candidates),
+                "candidates": len(candidates),
                 "candidates_with_content": len(candidates_with_content),
-                "skipped_dedup": skipped_dedup,
             },
         },
     )

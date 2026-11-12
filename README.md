@@ -54,7 +54,7 @@ database-daily-podcast/
 ├── scripts/
 │   ├── research_generate.py       # RSS fetch + primary-source fetch + Claude script gen
 │   ├── generate_email_html.py     # Renders script.txt + sources.json -> episode.html
-│   ├── send_email.py              # Sends episode.html via Gmail SMTP
+│   ├── send_email.py              # Sends episode.html via the Resend API
 │   ├── preflight.py                # Date resolution + idempotency check
 │   └── scan_secrets.py            # Pre-commit secret scanner
 │
@@ -74,10 +74,9 @@ database-daily-podcast/
          v
 2. scripts/research_generate.py
    - Fetches AWS What's New, AWS Database Blog, Microsoft SQL Server Blog (RSS)
-   - Dedups against every previous episodes/*/sources.json
    - Fetches each candidate's primary source page (not just the RSS summary)
-   - Calls Claude to select 2-4 DBA/DBRE-relevant stories and write a
-     600-750 word digest, grounded only in the fetched primary-source content
+   - Calls Claude to select 2-4 DBA/DBRE-relevant stories and write a brief
+     150-250 word overview, grounded only in the fetched primary-source content
    - Writes script.txt + sources.json
          |
          v
@@ -91,7 +90,7 @@ database-daily-podcast/
          |
          v
 5. scripts/send_email.py
-   - Sends episode.html (plus a plain-text fallback) via Gmail SMTP
+   - Sends episode.html (plus a plain-text fallback) via the Resend API
    - Only on success does the workflow continue to the commit step
          |
          v
@@ -107,14 +106,21 @@ published — the next scheduled run will try again for the same date.
 
 ## Episode Structure
 
-Each digest targets 600-750 written words. Suggested structure:
+The written overview targets 150-250 words — brief and high-level, not a
+detailed walkthrough. The per-story substance lives in the HTML's "Today's
+stories" cards instead, each with a source link. Structure:
 
 1. **Greeting** — one line, names the date
-2. **2-4 selected stories** — Aurora PostgreSQL, Aurora MySQL, SQL Server,
-   or general DBA/DBRE operational news
-3. For each story: what changed, which versions/environments are affected,
-   why a DBA/DBRE should care, and what (if anything) to check or prepare for
-4. **Sign-off** — one line
+2. **Brief overview** — names the 2-4 selected stories and why this week's
+   news matters as a whole; no version numbers or step-by-step detail here
+3. **Sign-off** — one line
+4. **Story cards** (rendered separately by `generate_email_html.py`) — one
+   per selected story: title linked to its source, category tag, and a
+   1-2 sentence `dba_relevance` note on what changed and what to check,
+   patch, or prepare for
+
+Selected stories are Aurora PostgreSQL, Aurora MySQL, SQL Server, or general
+DBA/DBRE operational news.
 
 Quality rules (enforced by the editorial prompt in `research_generate.py`):
 - Every factual claim must be grounded in the fetched primary-source content —
@@ -123,7 +129,7 @@ Quality rules (enforced by the editorial prompt in `research_generate.py`):
   Aurora relevance (this is not a generic PostgreSQL/MySQL news digest)
 - Developer-only stories (ORM features, SQL tutorials, etc.) are excluded
   unless they create a direct DBA/DBRE operational impact
-- If a category has no meaningful news that day, it's simply skipped
+- If a category has no meaningful news that week, it's simply skipped
 
 ---
 
@@ -136,9 +142,9 @@ committed file.
 | Secret | Purpose |
 |--------|---------|
 | `ANTHROPIC_API_KEY` | Claude API calls for story selection + digest writing |
-| `GMAIL_ADDRESS` | The Gmail account the digest is sent from |
-| `GMAIL_APP_PASSWORD` | A Google App Password for that account (requires 2-Step Verification; generate at https://myaccount.google.com/apppasswords) |
-| `EMAIL_TO` | *Optional.* Recipient address — defaults to `GMAIL_ADDRESS` (self-send) if unset |
+| `RESEND_API_KEY` | API key from a [Resend](https://resend.com) account used to send the digest |
+| `EMAIL_TO` | Recipient address |
+| `RESEND_FROM` | *Optional.* Sender — defaults to Resend's shared sandbox address if unset. Without a verified domain, Resend only allows sending to the address the account itself was signed up with. |
 
 **Never** put secrets in:
 - Any script or workflow YAML literal
@@ -168,10 +174,11 @@ than overwriting it.
 After cloning this repository, before the first real run:
 
 - [ ] Add `ANTHROPIC_API_KEY` to GitHub Actions Secrets
-- [ ] Enable 2-Step Verification on the sending Gmail account
-- [ ] Generate a Google App Password and add it as `GMAIL_APP_PASSWORD`
-- [ ] Add `GMAIL_ADDRESS` to GitHub Actions Secrets
-- [ ] (Optional) Add `EMAIL_TO` if the recipient differs from `GMAIL_ADDRESS`
+- [ ] Create a [Resend](https://resend.com) account, generate an API key
+- [ ] Add `RESEND_API_KEY` and `EMAIL_TO` to GitHub Actions Secrets
+- [ ] Without a verified domain: either sign up to Resend with the recipient
+      address itself, or sign up with a separate inbox and set up mail
+      forwarding from that inbox to the real recipient
 - [ ] Trigger `publish_episode.yml` manually once to confirm an email arrives
 
 ---
@@ -204,7 +211,7 @@ python scripts/generate_email_html.py \
 ## Running Tests
 
 Tests require no real credentials, API keys, or external services — all
-network and SMTP interactions are mocked.
+network and HTTP API interactions are mocked.
 
 ```bash
 pip install -r requirements.txt -r requirements-research.txt
