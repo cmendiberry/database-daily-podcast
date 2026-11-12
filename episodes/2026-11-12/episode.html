@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Daily – 2026-11-12</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+          style="max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;
+          box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background:#111827;padding:24px 32px;">
+              <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                color:#9ca3af;">Database Daily</div>
+              <div style="font-size:14px;color:#e5e7eb;margin-top:4px;">Thursday, November 12, 2026</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 32px 8px;">
+              <h1 style="font-size:24px;line-height:1.3;color:#111827;margin:0 0 20px;">Database Daily – 2026-11-12</h1>
+              <p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Good morning. Here&#x27;s this week&#x27;s Database Daily, Thursday, November 12, 2026.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">This week&#x27;s AWS Database Blog output is heavily Aurora-focused, and four stories stand out for operational teams.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Leading the digest is guidance on preventing out-of-memory restarts on Aurora MySQL 8.4 — an availability risk that can cause unexpected instance-level disruptions, and one worth reviewing if your fleet has moved to 8.4. Alongside that, a post on resilient IAM database authentication with Aurora Global Database tackles a real DR gap: ensuring that IAM-authenticated connections continue to work correctly after a cross-region failover, which is a scenario many teams haven&#x27;t fully tested.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">On the observability side, AWS has published a walkthrough on diagnosing Aurora MySQL performance using CloudWatch Database Insights — useful reading for teams building or refining their performance troubleshooting playbooks. Finally, for shops running Aurora zero-ETL integrations as part of their data pipeline or DR architecture, there&#x27;s new guidance on automating zero-ETL recovery after a global failover event, addressing a recovery step that is easy to overlook in runbook planning.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Note: article body content was not fully captured for any of this week&#x27;s candidates, so specific configuration details and version requirements are behind the source links — follow each URL for the full technical depth.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">That&#x27;s this week&#x27;s Database Daily digest. Stay reliable out there.</p>
+              <h2 style="font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;margin:32px 0 14px;">Today's stories</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;">
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/blogs/database/help-prevent-out-of-memory-restarts-on-aurora-mysql-8-4/" style="color:#111827;text-decoration:none;">Help prevent out-of-memory restarts on Aurora MySQL 8.4</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS Database Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Addresses a production availability risk specific to Aurora MySQL 8.4 where out-of-memory conditions can trigger unexpected instance restarts — DBAs running 8.4 should review this guidance for configuration or monitoring changes that reduce OOM exposure.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/blogs/database/resilient-iam-database-authentication-with-amazon-aurora-global-database-writer-endpoint/" style="color:#111827;text-decoration:none;">Resilient IAM database authentication with Amazon Aurora Global Database writer endpoint</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS Database Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Covers how to maintain IAM-based database authentication continuity against the Aurora Global Database writer endpoint across regional failover events — directly relevant to teams using IAM auth with multi-region Aurora deployments who need authentication to survive a failover without manual intervention.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/blogs/database/diagnose-amazon-aurora-mysql-performance-using-cloudwatch-database-insights/" style="color:#111827;text-decoration:none;">Diagnose Amazon Aurora MySQL performance using CloudWatch Database Insights</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS Database Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Demonstrates using CloudWatch Database Insights as a performance troubleshooting tool for Aurora MySQL — DBAs should review this as a structured approach to correlating wait events and query performance data for production incident diagnosis.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/blogs/database/automate-aurora-zero-etl-recovery-after-global-failover/" style="color:#111827;text-decoration:none;">Automate Aurora zero-ETL recovery after global failover</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS Database Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Addresses a gap in Aurora zero-ETL integration continuity: when an Aurora Global Database fails over to a secondary region, the zero-ETL pipeline must be recovered, and this post covers automation to handle that — critical for teams relying on zero-ETL integrations as part of their DR runbooks.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+</table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 28px;border-top:1px solid #e5e7eb;">
+              <p style="font-size:12px;color:#9ca3af;margin:0;">
+                Personal weekly digest — generated by Claude from automated research.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

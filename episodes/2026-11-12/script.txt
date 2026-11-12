@@ -1,0 +1,11 @@
+Good morning. Here's this week's Database Daily, Thursday, November 12, 2026.
+
+This week's AWS Database Blog output is heavily Aurora-focused, and four stories stand out for operational teams.
+
+Leading the digest is guidance on preventing out-of-memory restarts on Aurora MySQL 8.4 — an availability risk that can cause unexpected instance-level disruptions, and one worth reviewing if your fleet has moved to 8.4. Alongside that, a post on resilient IAM database authentication with Aurora Global Database tackles a real DR gap: ensuring that IAM-authenticated connections continue to work correctly after a cross-region failover, which is a scenario many teams haven't fully tested.
+
+On the observability side, AWS has published a walkthrough on diagnosing Aurora MySQL performance using CloudWatch Database Insights — useful reading for teams building or refining their performance troubleshooting playbooks. Finally, for shops running Aurora zero-ETL integrations as part of their data pipeline or DR architecture, there's new guidance on automating zero-ETL recovery after a global failover event, addressing a recovery step that is easy to overlook in runbook planning.
+
+Note: article body content was not fully captured for any of this week's candidates, so specific configuration details and version requirements are behind the source links — follow each URL for the full technical depth.
+
+That's this week's Database Daily digest. Stay reliable out there.

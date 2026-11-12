@@ -1,0 +1,68 @@
+{
+  "episode_date": "2026-11-12",
+  "generated_at": "2026-11-12T18:03:34.119425+00:00",
+  "mode": "automated_research",
+  "sources_consulted": [
+    {
+      "source": "AWS What's New",
+      "feed_url": "https://aws.amazon.com/about-aws/whats-new/recent/feed/",
+      "items_fetched": 100,
+      "items_relevant": 18,
+      "error": null
+    },
+    {
+      "source": "AWS Database Blog",
+      "feed_url": "https://aws.amazon.com/blogs/database/feed/",
+      "items_fetched": 20,
+      "items_relevant": 15,
+      "error": null
+    },
+    {
+      "source": "Microsoft SQL Server Blog",
+      "feed_url": "https://techcommunity.microsoft.com/t5/sql-server-blog/bg-p/SQLServerBlog/rss",
+      "items_fetched": 0,
+      "items_relevant": 0,
+      "error": "Feed parse error: <unknown>:14:71: not well-formed (invalid token)"
+    }
+  ],
+  "stories_selected": [
+    {
+      "title": "Help prevent out-of-memory restarts on Aurora MySQL 8.4",
+      "url": "https://aws.amazon.com/blogs/database/help-prevent-out-of-memory-restarts-on-aurora-mysql-8-4/",
+      "source": "AWS Database Blog",
+      "published": "2026-11-11",
+      "category": "Aurora MySQL",
+      "dba_relevance": "Addresses a production availability risk specific to Aurora MySQL 8.4 where out-of-memory conditions can trigger unexpected instance restarts — DBAs running 8.4 should review this guidance for configuration or monitoring changes that reduce OOM exposure."
+    },
+    {
+      "title": "Resilient IAM database authentication with Amazon Aurora Global Database writer endpoint",
+      "url": "https://aws.amazon.com/blogs/database/resilient-iam-database-authentication-with-amazon-aurora-global-database-writer-endpoint/",
+      "source": "AWS Database Blog",
+      "published": "2026-11-11",
+      "category": "Aurora MySQL",
+      "dba_relevance": "Covers how to maintain IAM-based database authentication continuity against the Aurora Global Database writer endpoint across regional failover events — directly relevant to teams using IAM auth with multi-region Aurora deployments who need authentication to survive a failover without manual intervention."
+    },
+    {
+      "title": "Diagnose Amazon Aurora MySQL performance using CloudWatch Database Insights",
+      "url": "https://aws.amazon.com/blogs/database/diagnose-amazon-aurora-mysql-performance-using-cloudwatch-database-insights/",
+      "source": "AWS Database Blog",
+      "published": "2026-11-11",
+      "category": "Aurora MySQL",
+      "dba_relevance": "Demonstrates using CloudWatch Database Insights as a performance troubleshooting tool for Aurora MySQL — DBAs should review this as a structured approach to correlating wait events and query performance data for production incident diagnosis."
+    },
+    {
+      "title": "Automate Aurora zero-ETL recovery after global failover",
+      "url": "https://aws.amazon.com/blogs/database/automate-aurora-zero-etl-recovery-after-global-failover/",
+      "source": "AWS Database Blog",
+      "published": "2026-11-11",
+      "category": "Aurora MySQL",
+      "dba_relevance": "Addresses a gap in Aurora zero-ETL integration continuity: when an Aurora Global Database fails over to a secondary region, the zero-ETL pipeline must be recovered, and this post covers automation to handle that — critical for teams relying on zero-ETL integrations as part of their DR runbooks."
+    }
+  ],
+  "model": "claude-sonnet-4-6",
+  "research_stats": {
+    "candidates": 15,
+    "candidates_with_content": 15
+  },
+  "script_word_count": 216
+}
