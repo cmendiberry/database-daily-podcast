@@ -23,8 +23,7 @@ or source code:
 - Private keys or certificates (`.pem`, `.key`, `.p12`)
 - Browser cookies or session data
 - Personal authentication information
-- Real email passwords, App Passwords, or usernames/password combinations
-  (e.g. `GMAIL_APP_PASSWORD`)
+- Real email passwords, App Passwords, or API keys (e.g. `RESEND_API_KEY`)
 - Secrets belonging to any external service
 
 Use **GitHub Actions Secrets** for any credentials required by CI/CD workflows.

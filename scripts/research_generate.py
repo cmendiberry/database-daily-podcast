@@ -8,7 +8,7 @@ FLOW (automated):
   3. Fetch primary source page content for each candidate
   4. Drop candidates whose source page cannot be retrieved or is too thin
   5. Call Claude with full primary-source content (not just RSS summaries)
-  6. Validate script length (600–750 words); retry once if outside range
+  6. Validate script length (150–250 words); retry once if outside range
   7. Write script.txt and sources.json
 
 FLOW (manual override via EPISODE_SCRIPT env var):
@@ -70,8 +70,8 @@ SOURCE_FETCH_TIMEOUT = 15
 MAX_SOURCE_CONTENT_CHARS = 4000   # Per candidate primary source page
 MIN_SOURCE_CONTENT_CHARS = 300    # Below this the page is considered insufficient
 MAX_CANDIDATES_TO_FETCH = 15      # Cap to keep prompt size and fetch time reasonable
-SCRIPT_MIN_WORDS = 600
-SCRIPT_MAX_WORDS = 750
+SCRIPT_MIN_WORDS = 150
+SCRIPT_MAX_WORDS = 250
 MODEL = "claude-sonnet-4-6"
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ MODEL = "claude-sonnet-4-6"
 # ---------------------------------------------------------------------------
 
 EDITORIAL_SYSTEM_PROMPT = """\
-You are the script writer for Database Daily, a short weekday podcast for DBAs and \
+You are the writer for Database Daily, a short weekly email digest for DBAs and \
 DBREs responsible for production database environments.
 
 PRIORITY ORDER for story selection:
@@ -108,38 +108,38 @@ source content explicitly confirms relevance to Amazon Aurora supported or compa
 versions, or directly enables Aurora upgrade or operational planning. The primary
 authoritative source for Aurora PostgreSQL and Aurora MySQL news is AWS itself.
 If Aurora relevance is not clearly stated in the provided source content, reject
-the story. The podcast is NOT a generic PostgreSQL or MySQL news podcast.
+the story. This digest is NOT a generic PostgreSQL or MySQL news digest.
 
-GROUNDING RULE: Every factual claim in the script MUST be supported by the PRIMARY
-SOURCE CONTENT provided below. Do not supplement from your general training knowledge.
+GROUNDING RULE: Every factual claim MUST be supported by the PRIMARY SOURCE
+CONTENT provided below. Do not supplement from your general training knowledge.
 If a specific version number, date, feature name, or technical detail is not present
 in the source content, omit it rather than guess. If a candidate story's source
 content is insufficient to clearly explain DBA/DBRE relevance, do not select it.
 
-For each selected story explain in the script:
-  1. What changed?
-  2. Which database versions / environments are affected?
-  3. Why should a DBA or DBRE care?
-  4. Is there anything they should check, patch, upgrade, configure, or prepare for?
-
 Do not merely read release notes — translate announcements into operational consequences.
 
-TONE: Concise, technical, practical, factual, vendor-neutral.
+TONE: Concise, practical, factual, vendor-neutral.
 
 Always state clearly when something is: preview, beta, region-specific, version-specific,
 deprecated, Extended Support only, or not yet generally available.
 
 Never present speculation as fact. Omit rather than guess.
 
-TARGET LENGTH: 600–750 words for a short written digest (not spoken/narrated).
+TARGET LENGTH: 150–250 words. This is a brief, high-level overview — NOT a
+detailed walkthrough. Name the selected stories and give one sentence of context
+on why this week's news matters as a whole. Do not restate each story's full
+technical detail here (version numbers, exact upgrade steps, affected
+environments); that level of detail belongs in each story's one-line
+"dba_relevance" field instead, and the reader can follow the source link for
+anything deeper.
 
 FORMAT: This is a written email digest, not a script to be read aloud. Start with
 a brief greeting, e.g.:
-  "Good morning. Here's what DBAs and DBREs need to know today, [full date]."
+  "Good morning. Here's this week's Database Daily, [full date]."
 End with a brief sign-off, e.g.:
-  "That's today's Database Daily digest. Stay reliable out there."
+  "That's this week's Database Daily digest. Stay reliable out there."
 
-Also write a short, specific EPISODE TITLE summarizing the day's top story or
+Also write a short, specific EPISODE TITLE summarizing the week's top story or
 stories (e.g. "Database upgrades: PostgreSQL 19, Aurora PostgreSQL 18, and Aurora
 MySQL 8.4") — this is used as the email subject line and headline, not a generic
 placeholder like "Database Daily – [date]".
@@ -248,7 +248,7 @@ def fetch_source_content(url: str, timeout: int = SOURCE_FETCH_TIMEOUT) -> "str 
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (compatible; DatabaseDailyBot/1.0; "
-                    "podcast research bot)"
+                    "digest research bot)"
                 ),
                 "Accept": "text/html,application/xhtml+xml,*/*",
                 "Accept-Language": "en-US,en;q=0.9",
@@ -326,7 +326,7 @@ def fetch_all_feeds(max_age_days: int = RESEARCH_WINDOW_DAYS, timeout: int = FEE
         try:
             feed = feedparser.parse(
                 url,
-                request_headers={"User-Agent": "DatabaseDailyBot/1.0 podcast-research"},
+                request_headers={"User-Agent": "DatabaseDailyBot/1.0 digest-research"},
             )
             if feed.get("bozo") and not feed.entries:
                 raise ValueError(f"Feed parse error: {feed.get('bozo_exception', 'unknown')}")
@@ -415,7 +415,9 @@ def _build_user_prompt(date_str: str, candidates: list) -> str:
         "is insufficient to explain DBA/DBRE relevance, do not select it.\n\n"
         f"{candidates_text}\n\n"
         "Select 2–4 of the strongest DBA/DBRE-relevant stories. "
-        "Write the complete digest (600–750 words) plus a short episode title.\n\n"
+        "Write the brief overview (150–250 words) plus a short episode title. "
+        "The real per-story substance goes in each story's dba_relevance field, "
+        "not the overview.\n\n"
         "Return valid JSON only — no markdown fences, no extra text:\n"
         "{\n"
         '  "episode_title": "short specific headline for today\'s digest",\n'
@@ -426,10 +428,11 @@ def _build_user_prompt(date_str: str, candidates: list) -> str:
         '      "source": "source name",\n'
         '      "published": "YYYY-MM-DD",\n'
         '      "category": "Aurora PostgreSQL | Aurora MySQL | SQL Server | General DBA",\n'
-        '      "dba_relevance": "one sentence on why DBAs need to know this"\n'
+        '      "dba_relevance": "1-2 sentences: what changed and what a DBA/DBRE '
+        'should check, patch, or prepare for -- the reader follows the URL for full depth"\n'
         "    }\n"
         "  ],\n"
-        '  "script": "the complete written digest body"\n'
+        '  "script": "the brief 150-250 word overview"\n'
         "}"
     )
 
@@ -473,7 +476,7 @@ def _parse_json_response(response_text: str) -> dict:
 def generate_script(date_str: str, candidates: list, api_key: str) -> dict:
     """
     Call Claude to select stories and write the episode script.
-    Validates length (600–750 words); retries once with correction if out of range.
+    Validates length (150–250 words); retries once with correction if out of range.
 
     Returns:
         {"script": str, "stories_selected": list, "model": str}

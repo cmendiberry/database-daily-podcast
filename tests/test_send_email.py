@@ -1,22 +1,26 @@
 """
 test_send_email.py - Tests for scripts/send_email.py
 
-No network access — smtplib.SMTP is replaced with a fake in-process
-stand-in for the send() tests. build_message() is tested directly with no
-I/O at all. time.sleep is monkeypatched so retry tests run instantly.
+No network access — urllib.request.urlopen is replaced with a fake
+in-process stand-in for the send() tests. build_payload() is tested
+directly with no I/O at all. time.sleep is monkeypatched so retry tests
+run instantly.
 
 Covers:
-  - build_message: headers, multipart/alternative with text + html parts
-  - send: connects via STARTTLS on port 587, logs in, and sends
+  - build_payload: from/to/subject/html/text fields
+  - send: POSTs once and succeeds on a 2xx response
   - send: retries on transient failure and succeeds within MAX_ATTEMPTS
   - send: raises the last error once MAX_ATTEMPTS is exhausted
-  - CLI: missing GMAIL_ADDRESS / GMAIL_APP_PASSWORD exits 1
-  - CLI: EMAIL_TO defaults to GMAIL_ADDRESS when unset
+  - send: a 4xx/5xx response raises with the response body included
+  - CLI: missing RESEND_API_KEY / EMAIL_TO exits 1
+  - CLI: RESEND_FROM defaults when unset
 """
 
+import json
 import os
 import subprocess
 import sys
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -26,98 +30,70 @@ SCRIPT = str(REPO_ROOT / "scripts" / "send_email.py")
 PYTHON = sys.executable
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from send_email import build_message, send
+from send_email import DEFAULT_FROM, build_payload, send
 
 
 # ---------------------------------------------------------------------------
-# build_message
+# build_payload
 # ---------------------------------------------------------------------------
 
 
-class TestBuildMessage:
-    def test_sets_headers(self):
-        msg = build_message("Subject line", "from@example.com", "to@example.com", "<p>hi</p>", "hi")
-        assert msg["Subject"] == "Subject line"
-        assert msg["From"] == "from@example.com"
-        assert msg["To"] == "to@example.com"
-
-    def test_is_multipart_alternative(self):
-        msg = build_message("S", "a@example.com", "b@example.com", "<p>hi</p>", "hi")
-        assert msg.get_content_type() == "multipart/alternative"
-
-    def test_contains_both_text_and_html_parts(self):
-        msg = build_message("S", "a@example.com", "b@example.com", "<p>HTML BODY</p>", "TEXT BODY")
-        parts = msg.get_payload()
-        payloads = [part.get_payload(decode=True).decode("utf-8") for part in parts]
-        content_types = [part.get_content_type() for part in parts]
-        assert "text/plain" in content_types
-        assert "text/html" in content_types
-        assert any("TEXT BODY" in p for p in payloads)
-        assert any("HTML BODY" in p for p in payloads)
+class TestBuildPayload:
+    def test_fields(self):
+        payload = build_payload("Subject line", "from@example.com", "to@example.com", "<p>hi</p>", "hi")
+        assert payload["subject"] == "Subject line"
+        assert payload["from"] == "from@example.com"
+        assert payload["to"] == ["to@example.com"]
+        assert payload["html"] == "<p>hi</p>"
+        assert payload["text"] == "hi"
 
 
 # ---------------------------------------------------------------------------
-# send (fake SMTP, no network)
+# send (fake urlopen, no network)
 # ---------------------------------------------------------------------------
 
 
-class FakeSMTP:
-    """Stand-in for smtplib.SMTP that records calls instead of connecting.
+class FakeResponse:
+    def __init__(self, body: bytes = b'{"id":"abc"}'):
+        self._body = body
 
-    fail_count controls how many constructions raise before one succeeds,
-    simulating a transient connection failure that later retries recover
-    from.
-    """
-
-    instances = []
-    fail_count = 0
-
-    def __init__(self, host, port):
-        if FakeSMTP.fail_count > 0:
-            FakeSMTP.fail_count -= 1
-            raise OSError("Connection unexpectedly closed")
-        self.host = host
-        self.port = port
-        self.starttls_calls = []
-        self.login_calls = []
-        self.sent_messages = []
-        self.quit_called = False
-        FakeSMTP.instances.append(self)
-
-    def starttls(self, context=None):
-        self.starttls_calls.append(context)
-
-    def login(self, address, app_password):
-        self.login_calls.append((address, app_password))
-
-    def send_message(self, message):
-        self.sent_messages.append(message)
+    def read(self):
+        return self._body
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.quit_called = True
         return False
 
 
-class AlwaysFailingSMTP(FakeSMTP):
-    def __init__(self, host, port):
-        raise OSError("Connection unexpectedly closed")
+class FakeUrlopenSuccessAfter:
+    """Stand-in for urllib.request.urlopen: fails fail_count times, then succeeds."""
+
+    def __init__(self, fail_count: int):
+        self.fail_count = fail_count
+        self.calls = []
+
+    def __call__(self, request, timeout=None):
+        self.calls.append(request)
+        if self.fail_count > 0:
+            self.fail_count -= 1
+            raise OSError("Connection reset")
+        return FakeResponse()
 
 
-class FailingLoginSMTP(FakeSMTP):
-    def login(self, address, app_password):
-        raise OSError("auth failed")
+def _always_fail_urlopen(request, timeout=None):
+    raise OSError("Connection reset")
 
 
-@pytest.fixture(autouse=True)
-def _reset_fake_instances():
-    FakeSMTP.instances = []
-    FakeSMTP.fail_count = 0
-    yield
-    FakeSMTP.instances = []
-    FakeSMTP.fail_count = 0
+def _http_error_urlopen(request, timeout=None):
+    raise urllib.error.HTTPError(
+        url="https://api.resend.com/emails",
+        code=422,
+        msg="Unprocessable Entity",
+        hdrs=None,
+        fp=__import__("io").BytesIO(b'{"message":"invalid from address"}'),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -126,44 +102,46 @@ def _no_real_sleep(monkeypatch):
 
 
 class TestSend:
-    def test_connects_via_starttls_logs_in_and_sends(self, monkeypatch):
-        monkeypatch.setattr("send_email.smtplib.SMTP", FakeSMTP)
-        msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
+    def test_sends_successfully(self, monkeypatch):
+        calls = []
 
-        send(msg, "me@gmail.com", "app-password")
+        def fake_urlopen(request, timeout=None):
+            calls.append(request)
+            return FakeResponse()
 
-        assert len(FakeSMTP.instances) == 1
-        instance = FakeSMTP.instances[0]
-        assert instance.host == "smtp.gmail.com"
-        assert instance.port == 587
-        assert len(instance.starttls_calls) == 1
-        assert instance.login_calls == [("me@gmail.com", "app-password")]
-        assert instance.sent_messages == [msg]
-        assert instance.quit_called is True
+        monkeypatch.setattr("send_email.urllib.request.urlopen", fake_urlopen)
+        payload = build_payload("S", "a@example.com", "b@example.com", "<p>hi</p>", "hi")
 
-    def test_propagates_login_failure(self, monkeypatch):
-        monkeypatch.setattr("send_email.smtplib.SMTP", FailingLoginSMTP)
-        msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
+        send(payload, "test-api-key")
 
-        with pytest.raises(OSError):
-            send(msg, "me@gmail.com", "wrong-password")
+        assert len(calls) == 1
+        req = calls[0]
+        assert req.full_url == "https://api.resend.com/emails"
+        assert req.get_header("Authorization") == "Bearer test-api-key"
+        assert json.loads(req.data.decode("utf-8")) == payload
 
     def test_retries_and_succeeds_after_transient_failure(self, monkeypatch):
-        monkeypatch.setattr("send_email.smtplib.SMTP", FakeSMTP)
-        FakeSMTP.fail_count = 1  # first attempt fails, second succeeds
-        msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
+        fake = FakeUrlopenSuccessAfter(fail_count=1)
+        monkeypatch.setattr("send_email.urllib.request.urlopen", fake)
+        payload = build_payload("S", "a@example.com", "b@example.com", "<p>hi</p>", "hi")
 
-        send(msg, "me@gmail.com", "app-password")
+        send(payload, "test-api-key")
 
-        assert len(FakeSMTP.instances) == 1
-        assert FakeSMTP.instances[0].sent_messages == [msg]
+        assert len(fake.calls) == 2
 
     def test_raises_after_exhausting_retries(self, monkeypatch):
-        monkeypatch.setattr("send_email.smtplib.SMTP", AlwaysFailingSMTP)
-        msg = build_message("S", "me@gmail.com", "me@gmail.com", "<p>hi</p>", "hi")
+        monkeypatch.setattr("send_email.urllib.request.urlopen", _always_fail_urlopen)
+        payload = build_payload("S", "a@example.com", "b@example.com", "<p>hi</p>", "hi")
 
-        with pytest.raises(OSError, match="Connection unexpectedly closed"):
-            send(msg, "me@gmail.com", "app-password")
+        with pytest.raises(OSError, match="Connection reset"):
+            send(payload, "test-api-key")
+
+    def test_http_error_includes_response_body(self, monkeypatch):
+        monkeypatch.setattr("send_email.urllib.request.urlopen", _http_error_urlopen)
+        payload = build_payload("S", "a@example.com", "b@example.com", "<p>hi</p>", "hi")
+
+        with pytest.raises(RuntimeError, match="invalid from address"):
+            send(payload, "test-api-key")
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +175,11 @@ def run_cli(env_overrides: dict, tmp_path: Path) -> subprocess.CompletedProcess:
 
 class TestCLI:
     def test_missing_credentials_exits_1(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("GMAIL_ADDRESS", raising=False)
-        monkeypatch.delenv("GMAIL_APP_PASSWORD", raising=False)
-        result = run_cli({"GMAIL_ADDRESS": "", "GMAIL_APP_PASSWORD": ""}, tmp_path)
+        monkeypatch.delenv("RESEND_API_KEY", raising=False)
+        monkeypatch.delenv("EMAIL_TO", raising=False)
+        result = run_cli({"RESEND_API_KEY": "", "EMAIL_TO": ""}, tmp_path)
         assert result.returncode == 1
-        assert "GMAIL_ADDRESS" in result.stderr
+        assert "RESEND_API_KEY" in result.stderr
+
+    def test_default_from_constant(self):
+        assert "@" in DEFAULT_FROM
