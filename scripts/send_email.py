@@ -64,6 +64,10 @@ def _send_once(payload: dict, api_key: str) -> None:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            # urllib's default "Python-urllib/3.x" User-Agent is a known bot
+            # signature that Cloudflare (fronting api.resend.com) blocks with
+            # a 403 (error code 1010) before the request ever reaches Resend.
+            "User-Agent": "database-daily-digest/1.0 (+https://github.com/cmendiberry/database-daily-podcast)",
         },
     )
     try:
