@@ -59,7 +59,11 @@ SOURCES = [
     },
     {
         "name": "Microsoft SQL Server Blog",
-        "url": "https://techcommunity.microsoft.com/t5/sql-server-blog/bg-p/SQLServerBlog/rss",
+        # Tech Community's old /t5/.../bg-p/.../rss URL now requires SSO login
+        # (redirects to login.microsoftonline.com) and returns an HTML login
+        # page instead of XML. This board-id RSS endpoint is the current,
+        # publicly reachable replacement.
+        "url": "https://techcommunity.microsoft.com/t5/s/gxcuf89792/rss/board?board.id=SQLServer",
         "keywords": [],  # All posts are SQL Server-relevant
     },
 ]
