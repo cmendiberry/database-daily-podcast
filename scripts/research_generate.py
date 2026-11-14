@@ -69,7 +69,11 @@ FEED_TIMEOUT = 20
 SOURCE_FETCH_TIMEOUT = 15
 MAX_SOURCE_CONTENT_CHARS = 4000   # Per candidate primary source page
 MIN_SOURCE_CONTENT_CHARS = 300    # Below this the page is considered insufficient
-MAX_CANDIDATES_TO_FETCH = 15      # Cap to keep prompt size and fetch time reasonable
+MAX_CANDIDATES_TO_FETCH = 40      # A 7-day weekly window typically surfaces ~30-35
+                                  # relevant candidates across sources; 15 was tuned
+                                  # for the old 1-day window and was silently dropping
+                                  # roughly half of each week's candidates before Claude
+                                  # ever saw them.
 SCRIPT_MIN_WORDS = 150
 SCRIPT_MAX_WORDS = 250
 MODEL = "claude-sonnet-4-6"
