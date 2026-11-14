@@ -1,0 +1,11 @@
+Good morning. Here's this week's Database Daily, Saturday, November 14, 2026.
+
+This week's news spans two platforms: a security patching round for Microsoft SQL Server and a pair of infrastructure updates for Amazon Aurora.
+
+On the SQL Server side, Microsoft released GDR security updates addressing CVE-2026-66813, a Denial of Service vulnerability, across SQL Server 2019 and SQL Server 2025. The same CVE appears in updates for additional versions as well. If you're running any of these releases, patching should be on your agenda now — the source links include KB article numbers and direct download links for both the Microsoft Download Center and the Update Catalog.
+
+On the Aurora front, two announcements landed this week. First, Amazon Aurora — covering both PostgreSQL and MySQL compatible editions — now supports the Graviton5-based R9g instance family, giving DBAs a new hardware tier to evaluate during capacity planning or instance refresh cycles. Second, Aurora PostgreSQL clusters using the express configuration can now be provisioned through AWS CloudFormation, which is a meaningful quality-of-life improvement for teams managing Aurora infrastructure as code.
+
+Taken together, it's a week that reminds us patching and infrastructure hygiene don't pause: SQL Server shops have a mandatory security fix to schedule, and Aurora teams have new options worth adding to their planning conversations.
+
+That's this week's Database Daily digest. Stay reliable out there.

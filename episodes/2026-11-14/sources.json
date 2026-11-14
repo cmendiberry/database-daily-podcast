@@ -1,0 +1,68 @@
+{
+  "episode_date": "2026-11-14",
+  "generated_at": "2026-11-14T14:51:35.599640+00:00",
+  "mode": "automated_research",
+  "sources_consulted": [
+    {
+      "source": "AWS What's New",
+      "feed_url": "https://aws.amazon.com/about-aws/whats-new/recent/feed/",
+      "items_fetched": 100,
+      "items_relevant": 24,
+      "error": null
+    },
+    {
+      "source": "AWS Database Blog",
+      "feed_url": "https://aws.amazon.com/blogs/database/feed/",
+      "items_fetched": 20,
+      "items_relevant": 20,
+      "error": null
+    },
+    {
+      "source": "Microsoft SQL Server Blog",
+      "feed_url": "https://techcommunity.microsoft.com/t5/s/gxcuf89792/rss/board?board.id=SQLServer",
+      "items_fetched": 20,
+      "items_relevant": 10,
+      "error": null
+    }
+  ],
+  "stories_selected": [
+    {
+      "title": "Security Update for SQL Server 2025 RTM (GDR)",
+      "url": "https://techcommunity.microsoft.com/t5/sql-server-blog/security-update-for-sql-server-2025-rtm/ba-p/4572291",
+      "source": "Microsoft SQL Server Blog",
+      "published": "2026-11-11",
+      "category": "SQL Server",
+      "dba_relevance": "A GDR security update for SQL Server 2025 RTM addresses CVE-2026-66813, a Denial of Service vulnerability; DBAs should download KB5132748 from the Microsoft Download Center or Update Catalog and apply it promptly."
+    },
+    {
+      "title": "Security Update for SQL Server 2019 RTM (GDR)",
+      "url": "https://techcommunity.microsoft.com/t5/sql-server-blog/security-update-for-sql-server-2019-rtm/ba-p/4572303",
+      "source": "Microsoft SQL Server Blog",
+      "published": "2026-11-11",
+      "category": "SQL Server",
+      "dba_relevance": "SQL Server 2019 receives the same CVE-2026-66813 Denial of Service fix via GDR KB5132751; DBAs running SQL Server 2019 RTM should apply this update regardless of whether they are on a cumulative update track."
+    },
+    {
+      "title": "Amazon Aurora and RDS now support Graviton5-based R9g database instances",
+      "url": "https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-aurora-rds-postgresql-mysql-mariadb-r9g-instances/",
+      "source": "AWS What's New",
+      "published": "2026-11-12",
+      "category": "Aurora PostgreSQL",
+      "dba_relevance": "Amazon Aurora (PostgreSQL and MySQL) now supports the new Graviton5-based R9g instance family; DBAs planning capacity upgrades or instance-type migrations should evaluate R9g as a potential performance and cost option."
+    },
+    {
+      "title": "Aurora PostgreSQL with express configuration now supported in CloudFormation",
+      "url": "https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-postgresql-cloudformation/",
+      "source": "AWS What's New",
+      "published": "2026-11-13",
+      "category": "Aurora PostgreSQL",
+      "dba_relevance": "Aurora PostgreSQL clusters using the express configuration can now be provisioned and managed via AWS CloudFormation, enabling DBAs and DBREs to incorporate express-tier Aurora PostgreSQL into infrastructure-as-code pipelines."
+    }
+  ],
+  "model": "claude-sonnet-4-6",
+  "research_stats": {
+    "candidates": 40,
+    "candidates_with_content": 40
+  },
+  "script_word_count": 223
+}

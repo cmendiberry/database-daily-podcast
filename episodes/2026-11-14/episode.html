@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Daily – 2026-11-14</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+          style="max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;
+          box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background:#111827;padding:24px 32px;">
+              <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                color:#9ca3af;">Database Daily</div>
+              <div style="font-size:14px;color:#e5e7eb;margin-top:4px;">Saturday, November 14, 2026</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 32px 8px;">
+              <h1 style="font-size:24px;line-height:1.3;color:#111827;margin:0 0 20px;">Database Daily – 2026-11-14</h1>
+              <p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Good morning. Here&#x27;s this week&#x27;s Database Daily, Saturday, November 14, 2026.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">This week&#x27;s news spans two platforms: a security patching round for Microsoft SQL Server and a pair of infrastructure updates for Amazon Aurora.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">On the SQL Server side, Microsoft released GDR security updates addressing CVE-2026-66813, a Denial of Service vulnerability, across SQL Server 2019 and SQL Server 2025. The same CVE appears in updates for additional versions as well. If you&#x27;re running any of these releases, patching should be on your agenda now — the source links include KB article numbers and direct download links for both the Microsoft Download Center and the Update Catalog.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">On the Aurora front, two announcements landed this week. First, Amazon Aurora — covering both PostgreSQL and MySQL compatible editions — now supports the Graviton5-based R9g instance family, giving DBAs a new hardware tier to evaluate during capacity planning or instance refresh cycles. Second, Aurora PostgreSQL clusters using the express configuration can now be provisioned through AWS CloudFormation, which is a meaningful quality-of-life improvement for teams managing Aurora infrastructure as code.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Taken together, it&#x27;s a week that reminds us patching and infrastructure hygiene don&#x27;t pause: SQL Server shops have a mandatory security fix to schedule, and Aurora teams have new options worth adding to their planning conversations.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">That&#x27;s this week&#x27;s Database Daily digest. Stay reliable out there.</p>
+              <h2 style="font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;margin:32px 0 14px;">Today's stories</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;">
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#c0392b;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">SQL Server</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://techcommunity.microsoft.com/t5/sql-server-blog/security-update-for-sql-server-2025-rtm/ba-p/4572291" style="color:#111827;text-decoration:none;">Security Update for SQL Server 2025 RTM (GDR)</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Microsoft SQL Server Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">A GDR security update for SQL Server 2025 RTM addresses CVE-2026-66813, a Denial of Service vulnerability; DBAs should download KB5132748 from the Microsoft Download Center or Update Catalog and apply it promptly.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#c0392b;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">SQL Server</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://techcommunity.microsoft.com/t5/sql-server-blog/security-update-for-sql-server-2019-rtm/ba-p/4572303" style="color:#111827;text-decoration:none;">Security Update for SQL Server 2019 RTM (GDR)</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Microsoft SQL Server Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">SQL Server 2019 receives the same CVE-2026-66813 Denial of Service fix via GDR KB5132751; DBAs running SQL Server 2019 RTM should apply this update regardless of whether they are on a cumulative update track.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#2f6fed;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora PostgreSQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-aurora-rds-postgresql-mysql-mariadb-r9g-instances/" style="color:#111827;text-decoration:none;">Amazon Aurora and RDS now support Graviton5-based R9g database instances</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-12</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Amazon Aurora (PostgreSQL and MySQL) now supports the new Graviton5-based R9g instance family; DBAs planning capacity upgrades or instance-type migrations should evaluate R9g as a potential performance and cost option.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#2f6fed;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora PostgreSQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-postgresql-cloudformation/" style="color:#111827;text-decoration:none;">Aurora PostgreSQL with express configuration now supported in CloudFormation</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-13</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Aurora PostgreSQL clusters using the express configuration can now be provisioned and managed via AWS CloudFormation, enabling DBAs and DBREs to incorporate express-tier Aurora PostgreSQL into infrastructure-as-code pipelines.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+</table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 28px;border-top:1px solid #e5e7eb;">
+              <p style="font-size:12px;color:#9ca3af;margin:0;">
+                Personal weekly digest — generated by Claude from automated research.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
