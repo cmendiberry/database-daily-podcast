@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Daily – 2026-11-16</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+          style="max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;
+          box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background:#111827;padding:24px 32px;">
+              <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                color:#9ca3af;">Database Daily</div>
+              <div style="font-size:14px;color:#e5e7eb;margin-top:4px;">Monday, November 16, 2026</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 32px 8px;">
+              <h1 style="font-size:24px;line-height:1.3;color:#111827;margin:0 0 20px;">Database Daily – 2026-11-16</h1>
+              <p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Good morning. Here&#x27;s this week&#x27;s Database Daily, Monday, November 16, 2026.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">This week&#x27;s news touches all three of our priority platforms, with the most urgent item coming from Microsoft.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">The lead story is a security patching requirement for SQL Server. Microsoft released updates for both SQL Server 2025 and SQL Server 2022 — across both the CU and GDR patch tracks — addressing CVE-2026-66813, a Denial of Service vulnerability. If you&#x27;re running either version, check which track your environment is on and apply the appropriate KB.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">On the Aurora MySQL side, AWS published a guidance post on preventing out-of-memory restarts on Aurora MySQL 8.4. OOM-driven restarts are an availability risk, and this is a good read for anyone who has recently upgraded to or is planning to run 8.4 in production.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">For capacity planning, Aurora and RDS now support the new Graviton5-based R9g instance family across PostgreSQL, MySQL, and MariaDB. If you have instance rightsizing or hardware refresh work coming up, R9g is worth adding to your evaluation list.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Finally, for teams managing Aurora PostgreSQL infrastructure as code, the express configuration is now supported in CloudFormation, closing a gap for automated provisioning pipelines.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">That&#x27;s this week&#x27;s Database Daily digest. Stay reliable out there.</p>
+              <h2 style="font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;margin:32px 0 14px;">Today's stories</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;">
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#c0392b;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">SQL Server</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://techcommunity.microsoft.com/t5/sql-server-blog/security-update-for-sql-server-2022-rtm-cu27/ba-p/4572293" style="color:#111827;text-decoration:none;">Security Updates for SQL Server 2025 and 2022 (CVE-2026-66813)</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Microsoft SQL Server Blog · 2026-11-10</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Microsoft released security updates for SQL Server 2025 RTM CU10, SQL Server 2025 RTM GDR, SQL Server 2022 RTM CU27, and SQL Server 2022 RTM GDR, all addressing CVE-2026-66813, a Denial of Service vulnerability — DBAs should evaluate and apply the appropriate KB (5129299, 5132748, 5129300, or 5132747) based on their installed version and patch track.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/blogs/database/help-prevent-out-of-memory-restarts-on-aurora-mysql-8-4/" style="color:#111827;text-decoration:none;">Help prevent out-of-memory restarts on Aurora MySQL 8.4</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS Database Blog · 2026-11-11</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">AWS published guidance on diagnosing and preventing OOM-triggered instance restarts on Aurora MySQL 8.4 — DBAs on that version should review the recommended configuration and monitoring approaches to reduce unplanned availability events.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#2f6fed;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora PostgreSQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-aurora-rds-postgresql-mysql-mariadb-r9g-instances/" style="color:#111827;text-decoration:none;">Amazon Aurora and RDS now support Graviton5-based R9g database instances</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-12</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Graviton5-based R9g instances are now available for Amazon Aurora (PostgreSQL and MySQL) and RDS, offering a new hardware tier for capacity planning and instance type migrations — DBAs should evaluate R9g as a candidate for their next instance resize or rightsizing review.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#2f6fed;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora PostgreSQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-postgresql-cloudformation/" style="color:#111827;text-decoration:none;">Aurora PostgreSQL with express configuration now supported in CloudFormation</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-13</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Aurora PostgreSQL clusters using the express configuration can now be provisioned and managed via AWS CloudFormation, enabling DBREs to include express-tier Aurora PostgreSQL in infrastructure-as-code pipelines and automated environment builds.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+</table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 28px;border-top:1px solid #e5e7eb;">
+              <p style="font-size:12px;color:#9ca3af;margin:0;">
+                Personal weekly digest — generated by Claude from automated research.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

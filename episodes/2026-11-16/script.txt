@@ -1,0 +1,13 @@
+Good morning. Here's this week's Database Daily, Monday, November 16, 2026.
+
+This week's news touches all three of our priority platforms, with the most urgent item coming from Microsoft.
+
+The lead story is a security patching requirement for SQL Server. Microsoft released updates for both SQL Server 2025 and SQL Server 2022 — across both the CU and GDR patch tracks — addressing CVE-2026-66813, a Denial of Service vulnerability. If you're running either version, check which track your environment is on and apply the appropriate KB.
+
+On the Aurora MySQL side, AWS published a guidance post on preventing out-of-memory restarts on Aurora MySQL 8.4. OOM-driven restarts are an availability risk, and this is a good read for anyone who has recently upgraded to or is planning to run 8.4 in production.
+
+For capacity planning, Aurora and RDS now support the new Graviton5-based R9g instance family across PostgreSQL, MySQL, and MariaDB. If you have instance rightsizing or hardware refresh work coming up, R9g is worth adding to your evaluation list.
+
+Finally, for teams managing Aurora PostgreSQL infrastructure as code, the express configuration is now supported in CloudFormation, closing a gap for automated provisioning pipelines.
+
+That's this week's Database Daily digest. Stay reliable out there.
