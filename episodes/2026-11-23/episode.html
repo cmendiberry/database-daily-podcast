@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Daily – 2026-11-23</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+          style="max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;
+          box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background:#111827;padding:24px 32px;">
+              <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                color:#9ca3af;">Database Daily</div>
+              <div style="font-size:14px;color:#e5e7eb;margin-top:4px;">Monday, November 23, 2026</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 32px 8px;">
+              <h1 style="font-size:24px;line-height:1.3;color:#111827;margin:0 0 20px;">Database Daily – 2026-11-23</h1>
+              <p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Good morning. Here&#x27;s this week&#x27;s Database Daily, Monday, November 23, 2026.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">This week&#x27;s news is dominated by Aurora MySQL capacity and patching news, a SQL Server patch update on RDS Custom, and an early platform planning signal for SQL Server on Linux.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">On the Aurora MySQL front, two items land together. Aurora MySQL 8.4.12 is now generally available — a prompt to review release notes and schedule minor-version upgrades for 8.4.x clusters. Separately, Aurora Serverless MySQL now supports a maximum of 384 ACUs, a meaningful capacity ceiling increase for teams running memory-heavy or high-concurrency serverless workloads who may have been bumping against the prior limit.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">For SQL Server shops on RDS Custom, AWS has confirmed support for the latest Cumulative Update and GDR releases — worth checking promptly if you have outstanding security or stability patches queued.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">Finally, a planning flag for SQL Server on Linux teams: Microsoft has announced preview support for SQL Server 2025 on Ubuntu 26.04 LTS, beginning with CU11. This is strictly evaluation and testing — not production — but if your organization is standardizing on Ubuntu 26.04 LTS, now is the time to start compatibility validation rather than waiting for GA.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">The blog candidates for Candidates 27 and 31 (Aurora PostgreSQL VPC provisioning and excessive logging performance) returned only CSS/rendering content with no readable substance, so those could not be verified against the grounding rule and were excluded.</p>
+<p style="font-size:16px;line-height:1.65;color:#1f2937;margin:0 0 16px;">That&#x27;s this week&#x27;s Database Daily digest. Stay reliable out there.</p>
+              <h2 style="font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;margin:32px 0 14px;">Today's stories</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;">
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-aurora-mysql-8412-available/" style="color:#111827;text-decoration:none;">Amazon Aurora MySQL 8.4.12 is now generally available</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-20</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Aurora MySQL 8.4.12 is now GA — teams running 8.4.x clusters should review the release notes for any fixes or behavioral changes and begin planning a minor-version upgrade.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#0f9d8c;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">Aurora MySQL</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-serverless-mysql-supports-384-acu/" style="color:#111827;text-decoration:none;">Amazon Aurora Serverless for MySQL now supports up to 384 ACUs</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-23</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">Aurora Serverless MySQL maximum capacity has increased to 384 ACUs, raising the ceiling for memory-intensive or high-concurrency serverless workloads — DBAs should revisit capacity configurations and cost estimates for clusters previously constrained by the prior limit.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#c0392b;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">SQL Server</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-rds-custom-supports-latest-cumulative-update-gdr-microsoft-sql-server/" style="color:#111827;text-decoration:none;">Amazon RDS Custom now supports the latest Cumulative Update and GDR updates for Microsoft SQL Server</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">AWS What&#x27;s New · 2026-11-20</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">RDS Custom for SQL Server now supports the latest CU and GDR patches — DBAs managing RDS Custom instances should check which updates are now available and assess whether security or stability patches warrant an immediate update cycle.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+
+      <tr>
+        <td style="padding:16px 20px;border:1px solid #e5e7eb;border-radius:10px;" >
+          <span style="display:inline-block;background:#c0392b;color:#ffffff;font-size:12px;
+            font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;
+            margin-bottom:10px;">SQL Server</span>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;color:#111827;margin:4px 0 6px;">
+            <a href="https://techcommunity.microsoft.com/t5/sql-server-blog/announcing-sql-server-2025-preview-support-on-ubuntu-26-04-lts/ba-p/4547833" style="color:#111827;text-decoration:none;">Announcing SQL Server 2025 Preview Support on Ubuntu 26.04 LTS</a>
+          </div>
+          <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Microsoft SQL Server Blog · 2026-11-18</div>
+          <div style="font-size:15px;color:#374151;line-height:1.5;">SQL Server 2025 on Ubuntu 26.04 LTS is now available in preview starting with CU11 — this is explicitly not for production use, but DBAs standardizing Linux infrastructure on Ubuntu 26.04 LTS should begin compatibility and configuration validation now.</div>
+        </td>
+      </tr>
+      <tr><td style="height:12px;line-height:12px;font-size:0;">&nbsp;</td></tr>
+</table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 28px;border-top:1px solid #e5e7eb;">
+              <p style="font-size:12px;color:#9ca3af;margin:0;">
+                Personal weekly digest — generated by Claude from automated research.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

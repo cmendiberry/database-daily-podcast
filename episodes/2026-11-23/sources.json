@@ -1,0 +1,68 @@
+{
+  "episode_date": "2026-11-23",
+  "generated_at": "2026-11-23T22:23:31.779739+00:00",
+  "mode": "automated_research",
+  "sources_consulted": [
+    {
+      "source": "AWS What's New",
+      "feed_url": "https://aws.amazon.com/about-aws/whats-new/recent/feed/",
+      "items_fetched": 100,
+      "items_relevant": 24,
+      "error": null
+    },
+    {
+      "source": "AWS Database Blog",
+      "feed_url": "https://aws.amazon.com/blogs/database/feed/",
+      "items_fetched": 20,
+      "items_relevant": 18,
+      "error": null
+    },
+    {
+      "source": "Microsoft SQL Server Blog",
+      "feed_url": "https://techcommunity.microsoft.com/t5/s/gxcuf89792/rss/board?board.id=SQLServer",
+      "items_fetched": 20,
+      "items_relevant": 5,
+      "error": null
+    }
+  ],
+  "stories_selected": [
+    {
+      "title": "Amazon Aurora MySQL 8.4.12 is now generally available",
+      "url": "https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-aurora-mysql-8412-available/",
+      "source": "AWS What's New",
+      "published": "2026-11-20",
+      "category": "Aurora MySQL",
+      "dba_relevance": "Aurora MySQL 8.4.12 is now GA — teams running 8.4.x clusters should review the release notes for any fixes or behavioral changes and begin planning a minor-version upgrade."
+    },
+    {
+      "title": "Amazon Aurora Serverless for MySQL now supports up to 384 ACUs",
+      "url": "https://aws.amazon.com/about-aws/whats-new/2026/11/aurora-serverless-mysql-supports-384-acu/",
+      "source": "AWS What's New",
+      "published": "2026-11-23",
+      "category": "Aurora MySQL",
+      "dba_relevance": "Aurora Serverless MySQL maximum capacity has increased to 384 ACUs, raising the ceiling for memory-intensive or high-concurrency serverless workloads — DBAs should revisit capacity configurations and cost estimates for clusters previously constrained by the prior limit."
+    },
+    {
+      "title": "Amazon RDS Custom now supports the latest Cumulative Update and GDR updates for Microsoft SQL Server",
+      "url": "https://aws.amazon.com/about-aws/whats-new/2026/11/amazon-rds-custom-supports-latest-cumulative-update-gdr-microsoft-sql-server/",
+      "source": "AWS What's New",
+      "published": "2026-11-20",
+      "category": "SQL Server",
+      "dba_relevance": "RDS Custom for SQL Server now supports the latest CU and GDR patches — DBAs managing RDS Custom instances should check which updates are now available and assess whether security or stability patches warrant an immediate update cycle."
+    },
+    {
+      "title": "Announcing SQL Server 2025 Preview Support on Ubuntu 26.04 LTS",
+      "url": "https://techcommunity.microsoft.com/t5/sql-server-blog/announcing-sql-server-2025-preview-support-on-ubuntu-26-04-lts/ba-p/4547833",
+      "source": "Microsoft SQL Server Blog",
+      "published": "2026-11-18",
+      "category": "SQL Server",
+      "dba_relevance": "SQL Server 2025 on Ubuntu 26.04 LTS is now available in preview starting with CU11 — this is explicitly not for production use, but DBAs standardizing Linux infrastructure on Ubuntu 26.04 LTS should begin compatibility and configuration validation now."
+    }
+  ],
+  "model": "claude-sonnet-4-6",
+  "research_stats": {
+    "candidates": 40,
+    "candidates_with_content": 40
+  },
+  "script_word_count": 243
+}

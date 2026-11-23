@@ -1,0 +1,13 @@
+Good morning. Here's this week's Database Daily, Monday, November 23, 2026.
+
+This week's news is dominated by Aurora MySQL capacity and patching news, a SQL Server patch update on RDS Custom, and an early platform planning signal for SQL Server on Linux.
+
+On the Aurora MySQL front, two items land together. Aurora MySQL 8.4.12 is now generally available — a prompt to review release notes and schedule minor-version upgrades for 8.4.x clusters. Separately, Aurora Serverless MySQL now supports a maximum of 384 ACUs, a meaningful capacity ceiling increase for teams running memory-heavy or high-concurrency serverless workloads who may have been bumping against the prior limit.
+
+For SQL Server shops on RDS Custom, AWS has confirmed support for the latest Cumulative Update and GDR releases — worth checking promptly if you have outstanding security or stability patches queued.
+
+Finally, a planning flag for SQL Server on Linux teams: Microsoft has announced preview support for SQL Server 2025 on Ubuntu 26.04 LTS, beginning with CU11. This is strictly evaluation and testing — not production — but if your organization is standardizing on Ubuntu 26.04 LTS, now is the time to start compatibility validation rather than waiting for GA.
+
+The blog candidates for Candidates 27 and 31 (Aurora PostgreSQL VPC provisioning and excessive logging performance) returned only CSS/rendering content with no readable substance, so those could not be verified against the grounding rule and were excluded.
+
+That's this week's Database Daily digest. Stay reliable out there.
